@@ -56,6 +56,7 @@ INPUT_FIELDS_OPTIONAL = {
     "systems_query",
     "launchable_query",
     "launch_command_query",
+    "extra_content_query",
     "rom_location_query",
     "rom_locations_query",
     "entry_savefile_query",
@@ -122,6 +123,10 @@ QUERY_FAMILY_FIELDS: dict[str, frozenset[str]] = {
     # system's content, optionally of the entry a label names; the file is the
     # frontend's spelling and absolute, as the question requires.
     "launch_command_query": frozenset({"installation", "system", "content_path", "label"}),
+    # Whether an entry's emulator loads a game's updates and add-ons from
+    # folders is asked of one system's entry, optionally named by its label,
+    # and optionally of one content path, absolute as the question requires.
+    "extra_content_query": frozenset({"installation", "system", "content_path", "label"}),
     # ROM placement is asked of one system; content plays no part in where a
     # system's ROMs live, so unlike the catalogue query this one takes no path.
     "rom_location_query": frozenset({"installation", "system"}),
@@ -736,6 +741,9 @@ KNOWN_CAVEAT_CODES = {
     "save-id-candidates",
     "active-profile-unestablished",
     "appimage-ambiguous",
+    "extra-content-folders-unstated",
+    "extra-content-scanned-beside-launch",
+    "content-outside-extra-content-folders",
     "emulator-read-unestablished",
     "emulator-config-unread",
     "feature-switch-absent",
@@ -1025,6 +1033,22 @@ def _validate_launch_command_query(name: str, query: Any) -> None:
     _validate_handle_selector(name, "launch_command_query", query)
 
 
+def _validate_extra_content_query(name: str, query: Any) -> None:
+    # The system names whose entry is asked about; the label and the content
+    # path are optional, and a path is absolute as the question requires.
+    if not isinstance(query, dict):
+        fail(f"{name}: input.extra_content_query must be an object")
+    keys = set(query)
+    if "system" not in keys or not keys <= QUERY_FAMILY_FIELDS["extra_content_query"]:
+        fail(f"{name}: input.extra_content_query must carry 'system' plus optional 'label', 'content_path' and 'installation'")
+    for key in keys:
+        if not isinstance(query[key], str) or not query[key]:
+            fail(f"{name}: input.extra_content_query.{key} must be a non-empty string")
+    if "content_path" in query and not query["content_path"].startswith("/"):
+        fail(f"{name}: input.extra_content_query.content_path must be absolute")
+    _validate_handle_selector(name, "extra_content_query", query)
+
+
 def _validate_launchable_query(name: str, query: Any) -> None:
     # Both halves are the question's subject: a verdict without a file has
     # nothing to derive an extension from, and one without a system has no
@@ -1311,6 +1335,7 @@ _OWN_QUERY_VALIDATORS = {
     "systems_query": _validate_systems_query,
     "launchable_query": _validate_launchable_query,
     "launch_command_query": _validate_launch_command_query,
+    "extra_content_query": _validate_extra_content_query,
     "rom_location_query": _validate_rom_location_query,
     "rom_locations_query": _validate_rom_locations_query,
     "firmware_query": _validate_firmware_query,
@@ -4079,6 +4104,54 @@ def _validate_launch_command(name: str, answer: Any) -> None:
     _validate_command_body(name, command)
 
 
+EXTRA_CONTENT_FIELDS = {"entry", "loads_from_folders", "folders", "content_folder_scanned", "caveats"}
+EXTRA_CONTENT_FOLDER_FIELDS = {"path", "subfolders_scanned", "registered_before_launch", "extensions"}
+
+
+def _validate_extra_content(name: str, answer: Any, query: Any) -> None:
+    """An extra-content answer: a three-valued statement, the folders behind a true one, and the content's verdict.
+
+    ``null`` is never silent — a caveat says why. Folders stand only beside a
+    ``true`` statement, and the content's verdict only where the query named
+    content.
+    """
+    _require_exact(name, answer, EXTRA_CONTENT_FIELDS, "expected.extra_content_folders")
+    if answer["entry"] is not None:
+        _validate_emulator(name, answer["entry"])
+    _validate_caveats(name, answer["caveats"])
+    loads = answer["loads_from_folders"]
+    if loads is not None and not isinstance(loads, bool):
+        fail(f"{name}: expected.extra_content_folders.loads_from_folders is true, false or null")
+    if loads is None and not answer["caveats"]:
+        fail(f"{name}: expected.extra_content_folders without a statement states why")
+    folders = answer["folders"]
+    if not isinstance(folders, list) or (folders and loads is not True):
+        fail(f"{name}: expected.extra_content_folders.folders is a list, empty unless loads_from_folders is true")
+    for folder in folders:
+        _validate_extra_content_folder(name, folder)
+    scanned = answer["content_folder_scanned"]
+    if scanned is not None and not isinstance(scanned, bool):
+        fail(f"{name}: expected.extra_content_folders.content_folder_scanned is true, false or null")
+    if scanned is not None and "content_path" not in query:
+        fail(f"{name}: expected.extra_content_folders.content_folder_scanned needs content in the query")
+
+
+def _validate_extra_content_folder(name: str, folder: Any) -> None:
+    """One folder scanned for extra content: an absolute path, two flags, and lowercase dotted extensions."""
+    _require_exact(name, folder, EXTRA_CONTENT_FOLDER_FIELDS, "each extra content folder")
+    if not (isinstance(folder["path"], str) and folder["path"].startswith("/")):
+        fail(f"{name}: an extra content folder's path is absolute")
+    if not isinstance(folder["subfolders_scanned"], bool):
+        fail(f"{name}: an extra content folder's subfolders_scanned is true or false")
+    if folder["registered_before_launch"] is not None and not isinstance(folder["registered_before_launch"], bool):
+        fail(f"{name}: an extra content folder's registered_before_launch is true, false or null")
+    extensions = folder["extensions"]
+    if not isinstance(extensions, list) or not all(
+        isinstance(e, str) and e.startswith(".") and e == e.lower() for e in extensions
+    ):
+        fail(f"{name}: an extra content folder's extensions are lowercase and dotted")
+
+
 def _validate_command_body(name: str, command: Any) -> None:
     """One command taken apart: the program by its variant, plain-string arguments, the environment, the folder."""
     _require_exact(name, command, LAUNCH_COMMAND_FIELDS, "expected.launch_command.command")
@@ -4276,6 +4349,7 @@ _EXPECTED_KEYS = {
     "systems",
     "launchable",
     "launch_command",
+    "extra_content_folders",
     "rom_location",
     "rom_locations",
     "entry_savefile_location",
@@ -4305,6 +4379,7 @@ _EXPECTATION_PAIRINGS = (
     ("roots", "roots_query"),
     ("launchable", "launchable_query"),
     ("launch_command", "launch_command_query"),
+    ("extra_content_folders", "extra_content_query"),
     ("rom_location", "rom_location_query"),
     ("rom_locations", "rom_locations_query"),
     ("savefile_location", "savefile_query"),
@@ -4343,6 +4418,7 @@ _RESOLVER_EXPECTATIONS = {
     "rom_locations",
     "launchable",
     "launch_command",
+    "extra_content_folders",
     "firmware",
     "identification",
     "systems_for_platform",
@@ -4403,6 +4479,10 @@ def _block_checks(expected: dict[str, Any], inp: dict[str, Any]) -> tuple[_Block
         _BlockCheck("roots", _validate_roots),
         _BlockCheck("launchable", _validate_launchable),
         _BlockCheck("launch_command", _validate_launch_command),
+        _BlockCheck(
+            "extra_content_folders",
+            lambda name, block: _validate_extra_content(name, block, inp["extra_content_query"]),
+        ),
         _BlockCheck("savestate_location", _validate_savestate_outcome),
         _BlockCheck("screenshot_location", _validate_screenshot_outcome),
         _BlockCheck(

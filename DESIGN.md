@@ -79,6 +79,11 @@ inst.rom_location("n64")             # on EVERY handle: a RomPlacement (dir, phy
 inst.rom_locations()                 # on EVERY handle: a RomLocationsAnswer — rom_location for every
                                      # system systems() lists, in its order, in one question that reads
                                      # the catalogue once; systems()'s caveats ride once on the whole.
+inst.extra_content_folders("switch", content_path="/.../roms/switch/Game/Game.nsp")
+                                     # on EVERY handle: an ExtraContentAnswer — whether the entry's emulator
+                                     # loads a game's updates and add-ons from files in folders (true / false
+                                     # / null, never false out of ignorance), which folders, and whether the
+                                     # content's own folder is one. Stated for a standalone Eden AppImage only.
 
 # -> SavefilePlacement (dir, root_kind, needs, file_set, granularity, caveats, fallback_dir, physical_dir),
 #    or — on the entry route — Unresolved (a typed domain outcome, e.g. a standalone entry

@@ -354,6 +354,44 @@ user folders found), and `save_id` beside `file-names-unestablished`, spelled `p
 digits. Two AppImages that put the trees in different places refuse the save with `appimage-ambiguous`. Firmware and
 keys are not read: the entry's firmware declaration is `unsupported`.
 
+#### Updates and add-ons lying in folders — `extra_content_folders`
+
+Eden loads a game's updates and add-on content (DLC) from Switch packages lying in folders, with no install step. Ask
+which folders, and whether the content's own folder is one of them:
+
+```python
+answer = handle.extra_content_folders("switch", content_path="/home/deck/roms/switch/Zelda/Zelda.nsp")
+answer.loads_from_folders  # True for the Eden entry; None (never False) where atlas has not established it
+for folder in answer.folders:  # in the order Eden's settings list them
+    folder.path, folder.subfolders_scanned, folder.registered_before_launch, folder.extensions
+answer.content_folder_scanned  # True / False, or None without content_path or where it cannot tell
+```
+
+Two lists of `qt-config.ini`'s `[Paths]` feed it, read the way Eden reads them (portable `user/config` beside the
+AppImage, else `~/.config/eden`):
+
+- `external_content_dirs` — scanned when Eden starts, every subfolder included, so what lies there is registered before
+  the game boots: `subfolders_scanned` and `registered_before_launch` are both `true`.
+- the game folders, `gamedirs` — scanned only while `[Data%20Storage]` `ext_content_from_game_dirs` is on (its default),
+  a folder's subfolders only where its `deep_scan` is set. Eden's game list scans them on a worker thread it does not
+  wait for before booting the game it was handed, so `registered_before_launch` is `null` and the answer carries
+  `extra-content-scanned-beside-launch` with those `folders`. The `SDMC`, `UserNAND` and `SysNAND` rows are installed
+  content, not folders, and are left out.
+
+Both scans read `.nsp` and `.xci` packages only (`extensions`); an `.nsz` or `.xcz` there is not read. A relative folder
+is below the AppImage's folder, the launch's working directory. The content's own folder is the folder the content lies
+in, or the content itself where it is a folder (RomM's layout for a game kept with its update and add-ons); it is
+scanned where it is a listed folder, or below one whose subfolders are scanned — compared as spelled, both normalised.
+Where it is not, `content_folder_scanned` is `false` and the answer carries `content-outside-extra-content-folders` with
+that `folder`. Several AppImages that put the settings in different places answer no folders and a `null` verdict beside
+`appimage-ambiguous`; a relative folder they leave unplaced is left out, and the verdict is `null` where no other folder
+covers the content.
+
+Every other entry, of every other arrangement, answers `loads_from_folders` `null` with `extra-content-folders-unstated`
+(`installation`, and the `entry`'s label where one was chosen) — a statement about atlas, not a "no". A `label` chooses
+the entry as `launch_command` chooses it, and the CLI asks it as
+`emu-atlas extra-content-folders --system switch [--content <absolute path>] [--label <label>]`.
+
 ### The name to show a person — `label`
 
 `kind` is an identifier and reads like one. When you put it in front of a user, ask atlas for the name the project

@@ -352,6 +352,7 @@ def _answers(handle, skip: tuple[str, ...] = ()) -> dict[str, tuple[str, ...]]:
         "emulators_for": lambda: tuple(c.code for c in handle.emulators_for(SYSTEM).caveats),
         "launchable": lambda: tuple(c.code for c in handle.launchable(SYSTEM, "/roms/gb/Game.gb").caveats),
         "launch_command": lambda: tuple(c.code for c in handle.launch_command(SYSTEM, "/roms/gb/Game.gb").caveats),
+        "extra_content_folders": lambda: tuple(c.code for c in handle.extra_content_folders(SYSTEM).caveats),
         "rom_location": lambda: tuple(c.code for c in handle.rom_location(SYSTEM).caveats),
         "rom_locations": lambda: tuple(c.code for c in handle.rom_locations().caveats),
         "firmware_for_core": lambda: tuple(c.code for c in handle.firmware_for_core(core_so=CORE_SO).caveats),

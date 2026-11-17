@@ -423,3 +423,133 @@ class TestTheSave:
         assert isinstance(direct, atlas.SavefilePlacement) and direct.dir == f"{SAVES}/{FOLDER_A}/{ZELDA_ID}"
         refused = handle.savefile_location(core_so="mgba_libretro.so")
         assert isinstance(refused, atlas.Unresolved) and refused.code == "core-not-installed"
+
+
+class TestReadingWhereExtrasLie:
+    """``[Paths] gamedirs``, ``external_content_dirs`` and ``ext_content_from_game_dirs``, read the way Eden reads them."""
+
+    def test_game_dir_rows_keep_their_order_and_deep_scan(self):
+        values = eden.ini_values(
+            "[Paths]\n"
+            "gamedirs\\size=2\n"
+            "gamedirs\\1\\path=SDMC\n"
+            "gamedirs\\2\\path=\"/roms/my switch\"\n"
+            "gamedirs\\2\\deep_scan\\default=false\n"
+            "gamedirs\\2\\deep_scan=true\n"
+        )
+        assert eden.game_dirs(values) == (eden.GameDir("SDMC", False), eden.GameDir("/roms/my switch", True))
+
+    def test_a_deep_scan_whose_default_companion_is_true_is_off_whatever_it_says(self):
+        values = eden.ini_values(
+            "[Paths]\ngamedirs\\size=1\ngamedirs\\1\\path=/roms\n"
+            "gamedirs\\1\\deep_scan\\default=true\ngamedirs\\1\\deep_scan=true\n"
+        )
+        assert eden.game_dirs(values) == (eden.GameDir("/roms", False),)
+
+    def test_no_row_puts_the_installed_content_rows_in_and_carries_the_old_root_over(self):
+        assert [row.path for row in eden.game_dirs({})] == ["SDMC", "UserNAND", "SysNAND"]
+        values = eden.ini_values(
+            "[Paths]\ngameListRootDir\\default=false\ngameListRootDir=/old//roms\n"
+            "gameListDeepScan\\default=false\ngameListDeepScan=true\n"
+        )
+        assert eden.game_dirs(values)[-1] == eden.GameDir("/old/roms", True)
+
+    def test_external_content_dirs_drop_quotes_and_skip_empty_rows(self):
+        values = eden.ini_values(
+            "[Paths]\nexternal_content_dirs\\size=3\nexternal_content_dirs\\1\\path=\"/a b\"\n"
+            "external_content_dirs\\2\\path=\nexternal_content_dirs\\3\\path=/c\n"
+        )
+        assert eden.external_content_dirs(values) == ("/a b", "/c")
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("", True),
+            ("[Data%20Storage]\next_content_from_game_dirs=false\n", True),
+            ("[Data%20Storage]\next_content_from_game_dirs\\default=false\next_content_from_game_dirs=false\n", False),
+            ("[Data%20Storage]\next_content_from_game_dirs\\default=false\next_content_from_game_dirs=True\n", False),
+            ("[Data%20Storage]\next_content_from_game_dirs\\default=false\next_content_from_game_dirs=\n", True),
+            ("[Data%20Storage]\next_content_from_game_dirs\\default=false\next_content_from_game_dirs=true\n", True),
+        ],
+    )
+    def test_ext_content_from_game_dirs_is_a_generic_setting_true_only_as_true(self, text, expected):
+        assert eden.ext_content_from_game_dirs(eden.ini_values(text)) is expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"), [("3", 3), ("0x10", 16), (" 2", 2), ("-1", -1), ("2x", 7), ("0x", 7), ("", 7), (None, 7)]
+    )
+    def test_an_array_size_reads_as_simpleini_reads_a_long(self, value, expected):
+        assert eden.simpleini_long(value, 7) == expected
+
+
+class TestTheExtrasEdenLoadsFromFolders:
+    """The extra-content answer of the Eden entry, and of a system it has none for."""
+
+    def _answer(self, config: str, content_path: str | None = None, files: Mapping[str, object] | None = None,
+                **kwargs: object) -> atlas.ExtraContentAnswer:
+        machine = _machine({CONFIG: config, **(files or {})})
+        return _handle(machine, **kwargs).extra_content_folders("switch", content_path=content_path)
+
+    def test_a_deep_scanned_game_folder_covers_a_game_in_a_folder_of_its_own(self):
+        config = (
+            "[Paths]\ngamedirs\\size=1\ngamedirs\\1\\path=/roms/switch\n"
+            "gamedirs\\1\\deep_scan\\default=false\ngamedirs\\1\\deep_scan=true\n"
+        )
+        game = "/roms/switch/Zelda/Zelda.nsp"
+        answer = self._answer(config, game, {game: BLOB})
+        assert answer.loads_from_folders is True
+        assert answer.folders == (atlas.ExtraContentFolder("/roms/switch", True, None, (".nsp", ".xci")),)
+        assert answer.content_folder_scanned is True
+        assert atlas.CAVEAT_CONTENT_OUTSIDE_EXTRA_CONTENT_FOLDERS not in {c.code for c in answer.caveats}
+
+    def test_a_relative_folder_is_below_the_appimages_own_folder(self):
+        config = "[Paths]\nexternal_content_dirs\\size=1\nexternal_content_dirs\\1\\path=dlc\n"
+        answer = self._answer(config, f"{HOME}/Applications/dlc/Game/Game.nsp")
+        assert answer.folders[0].path == f"{HOME}/Applications/dlc"
+        assert answer.content_folder_scanned is True
+
+    def test_a_sibling_that_shares_a_prefix_is_not_inside(self):
+        config = "[Paths]\nexternal_content_dirs\\size=1\nexternal_content_dirs\\1\\path=/extras\n"
+        answer = self._answer(config, "/extras-old/Game.nsp")
+        assert answer.content_folder_scanned is False
+        [outside] = [c for c in answer.caveats if c.code == atlas.CAVEAT_CONTENT_OUTSIDE_EXTRA_CONTENT_FOLDERS]
+        assert outside.data == {"folder": "/extras-old"}
+
+    def test_no_content_leaves_the_content_verdict_open_and_says_nothing_of_outside(self):
+        config = "[Paths]\nexternal_content_dirs\\size=1\nexternal_content_dirs\\1\\path=/extras\n"
+        answer = self._answer(config)
+        assert answer.content_folder_scanned is None
+        assert {c.code for c in answer.caveats} == {"arrangement-unverified"}
+
+    def test_a_relative_folder_with_appimages_in_two_folders_is_not_placed(self):
+        config = "[Paths]\nexternal_content_dirs\\size=1\nexternal_content_dirs\\1\\path=dlc\n"
+        machine = _machine({CONFIG: config, NIGHTLY: BLOB})
+        answer = _handle(machine).extra_content_folders("switch", content_path="/roms/switch/Game.nsp")
+        assert answer.folders == ()
+        assert answer.content_folder_scanned is None
+        assert atlas.CAVEAT_APPIMAGE_AMBIGUOUS in {c.code for c in answer.caveats}
+
+    def test_appimages_reading_different_trees_name_no_folder(self):
+        machine = _machine({NIGHTLY: BLOB}, dirs=[f"{HOME}/AppImages/user"])
+        answer = _handle(machine).extra_content_folders("switch", content_path=ZELDA)
+        assert (answer.loads_from_folders, answer.folders, answer.content_folder_scanned) == (True, (), None)
+        assert atlas.CAVEAT_APPIMAGE_AMBIGUOUS in {c.code for c in answer.caveats}
+
+    def test_another_system_or_an_unknown_label_states_nothing(self):
+        handle = _handle(_machine())
+        other = handle.extra_content_folders("gba")
+        assert (other.entry, other.loads_from_folders) == (None, None)
+        assert atlas.CAVEAT_EXTRA_CONTENT_FOLDERS_UNSTATED in {c.code for c in other.caveats}
+        unknown = handle.extra_content_folders("switch", label="Ryujinx")
+        assert unknown.loads_from_folders is None
+        assert "launch-command-label-unknown" in {c.code for c in unknown.caveats}
+
+    def test_a_relative_content_path_is_refused_at_the_call(self):
+        with pytest.raises(ValueError):
+            _handle(_machine()).extra_content_folders("switch", content_path="roms/Game.nsp")
+        with pytest.raises(ValueError):
+            atlas.every_installation(HOME, _machine()).extra_content_folders("switch", content_path="roms/Game.nsp")
+
+    def test_every_installation_asks_each_handle(self):
+        [answer] = atlas.every_installation(HOME, _machine()).extra_content_folders("switch")
+        assert answer.answer.loads_from_folders is True
