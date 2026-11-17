@@ -414,7 +414,7 @@ class TestTheStandaloneGameCubeAnswer:
     def test_the_statement_serializes_on_its_group(self):
         p = _answer("gc", discs=GALE, files={f"{USA_A}/01-GALE-a.gci": _gci(b"GALE")})
         group = savefile_placement_contract(p)["file_set"]["groups"][0]
-        assert group["unit"] == {"kind": "own-files", "members": ["01-GALE-a.gci"], "archive_folder": None}
+        assert group["unit"] == {"kind": "own-files", "members": ["01-GALE-a.gci"], "archive_folder": None, "prefix": None}
 
 
 class TestTheStandaloneWiiAnswer:
@@ -513,14 +513,15 @@ class TestOnlyTheReadingsThatEstablishItStateIt:
 
     def test_no_vector_outside_the_reading_systems_states_a_unit(self):
         # GameCube and Wii by Dolphin's disc reads; Switch by Eden's, which
-        # names the application and the active user.
+        # names the application and the active user; PSP by PPSSPP's, which
+        # names the game's id.
         stated = [
             system
             for system, answer in self._answers()
             for group in (answer.get("file_set") or {}).get("groups", [])
             if group["unit"] is not None
         ]
-        assert stated and set(stated) <= {"gc", "wii", "switch"}
+        assert stated and set(stated) <= {"gc", "wii", "switch", "psp"}
 
     @pytest.mark.parametrize("system", ["ps3", "wiiu", "n3ds"])
     def test_rpcs3_cemu_and_azahar_answer_per_game_directories_with_no_unit(self, system):

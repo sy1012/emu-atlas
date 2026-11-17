@@ -46,6 +46,8 @@ INPUT_FIELDS_OPTIONAL = {
     "dolphin_discs",
     "switch_packages",
     "eden_profiles",
+    "psp_discs",
+    "psp_param_sfos",
     "disc_identities",
     "archives",
     "archive_texts",
@@ -288,9 +290,9 @@ KNOWN_KEYINGS = {"game-id", "serial", "title-id", "rom-name", "pack", "title"}
 FILE_SET_FIELDS = {"state", "files", "complete", "groups"}
 FILE_GROUP_FIELDS = {"dir", "files", "granularity", "role", "size_fixed", "unit"}
 # The statement that a group's folder, or named files in it, are one game's own
-# save (atlas.placement.SaveUnitStatement): its fields and its two kinds.
-SAVE_UNIT_FIELDS = {"kind", "members", "archive_folder"}
-KNOWN_SAVE_UNIT_KINDS = {"own-folder", "own-files"}
+# save (atlas.placement.SaveUnitStatement): its fields and its three kinds.
+SAVE_UNIT_FIELDS = {"kind", "members", "archive_folder", "prefix"}
+KNOWN_SAVE_UNIT_KINDS = {"own-folder", "own-files", "own-folders-by-prefix"}
 # The byte a fixed-size save may be padded with at its end
 # (size-fixed-except-trailing-fill's data["fill"]).
 KNOWN_SIZE_FILLS = {"0xff", "0x00"}
@@ -562,7 +564,7 @@ KNOWN_STATE_ROOT_KINDS = {
 KNOWN_HOLES = {"content_dir", "content_dir_name", "cwd", "library_name", "profile_id", "region", "rom_stem", "save_id"}
 # How a ``save_id`` fill is spelled — the value of a caveat's
 # ``save_id_spelling``, which rides beside its ``save_id`` fill sentence.
-KNOWN_SAVE_ID_SPELLINGS = {"title-id-words", "path-segment", "game-code"}
+KNOWN_SAVE_ID_SPELLINGS = {"title-id-words", "path-segment", "game-code", "psp-game-id"}
 KNOWN_GRANULARITIES = {
     "shared-card",
     "shared-file",
@@ -740,6 +742,7 @@ KNOWN_CAVEAT_CODES = {
     "save-dir-unlistable",
     "save-id-candidates",
     "active-profile-unestablished",
+    "psn-save-prefix-may-differ",
     "appimage-ambiguous",
     "extra-content-folders-unstated",
     "extra-content-scanned-beside-launch",
@@ -1391,6 +1394,8 @@ def _validate_input(name: str, inp: Any) -> None:
     _validate_input_dolphin_discs(name, inp.get("dolphin_discs", {}), inp["files"])
     _validate_input_switch_packages(name, inp.get("switch_packages", {}), inp["files"])
     _validate_input_eden_profiles(name, inp.get("eden_profiles", {}), inp["files"])
+    _validate_input_psp_discs(name, inp.get("psp_discs", {}), inp["files"])
+    _validate_input_psp_param_sfos(name, inp.get("psp_param_sfos", {}), inp["files"])
     _validate_input_archives(name, inp.get("archives", {}), inp["files"])
     _validate_input_disc_identities(name, inp.get("disc_identities", {}), inp["files"], inp.get("archives", {}))
     _validate_input_archive_texts(name, inp.get("archive_texts", {}), inp.get("archives", {}))
@@ -1623,6 +1628,49 @@ def _validate_input_eden_profiles(name: str, declared: Any, files: Any) -> None:
                 f"{name}: eden profiles {path!r} must be 'short' or at most eight UUIDs of thirty-two "
                 "lowercase hex digits, not all zero"
             )
+
+
+# psp_discs: the path of a PSP disc image `files` declares -> what PPSSPP reads
+# of it, {"container": "iso", "disc_id": <DISC_ID as stated>}, or
+# "format-not-read" (a CSO, PBP or CHD) / "not-a-disc". psp_param_sfos: the
+# path of a PARAM.SFO `files` declares -> the keys it holds, or "not-an-sfo".
+PSP_DISC_STATES = {"format-not-read", "not-a-disc"}
+PSP_PARAM_SFO_STATES = {"not-an-sfo"}
+
+
+def _validate_input_psp_discs(name: str, declared: Any, files: Any) -> None:
+    if not isinstance(declared, dict):
+        fail(f"{name}: input.psp_discs must be an object")
+    for path, spec in declared.items():
+        _declared_readable(name, "psp disc", path, files)
+        if isinstance(spec, str) and spec in PSP_DISC_STATES:
+            continue
+        if (
+            not isinstance(spec, dict)
+            or set(spec) != {"container", "disc_id"}
+            or spec["container"] != "iso"
+            or not isinstance(spec["disc_id"], str)
+            or not spec["disc_id"]
+        ):
+            fail(
+                f"{name}: psp disc {path!r} must be 'format-not-read', 'not-a-disc' or "
+                '{"container": "iso", "disc_id": <non-empty string>}'
+            )
+
+
+def _validate_input_psp_param_sfos(name: str, declared: Any, files: Any) -> None:
+    if not isinstance(declared, dict):
+        fail(f"{name}: input.psp_param_sfos must be an object")
+    for path, spec in declared.items():
+        _declared_readable(name, "psp param.sfo", path, files)
+        if isinstance(spec, str) and spec in PSP_PARAM_SFO_STATES:
+            continue
+        if (
+            not isinstance(spec, list)
+            or not all(isinstance(key, str) and key for key in spec)
+            or len(set(spec)) != len(spec)
+        ):
+            fail(f"{name}: psp param.sfo {path!r} must be 'not-an-sfo' or a list of distinct non-empty keys")
 
 
 def _is_number(value: Any, bits: int) -> bool:
@@ -2203,6 +2251,22 @@ def _validate_save_unit(name: str, unit: Any) -> None:
         fail(f"{name}: file group unit members must be distinct entry names")
     if unit["archive_folder"] is not None and not _is_entry_name(unit["archive_folder"]):
         fail(f"{name}: file group unit archive_folder must be null or an entry name")
+    _validate_save_unit_prefix(name, unit)
+
+
+def _validate_save_unit_prefix(name: str, unit: Any) -> None:
+    """``own-folders-by-prefix`` states a prefix every member begins with (ASCII case aside), and packs at the top."""
+    prefix = unit["prefix"]
+    if (prefix is None) != (unit["kind"] != "own-folders-by-prefix"):
+        fail(f"{name}: a file group unit states a prefix exactly when its kind is own-folders-by-prefix")
+    if prefix is None:
+        return
+    if not _is_entry_name(prefix):
+        fail(f"{name}: file group unit prefix must be an entry name")
+    if unit["archive_folder"] is not None:
+        fail(f"{name}: an own-folders-by-prefix unit packs at the archive's top level (archive_folder null)")
+    if not all(member[: len(prefix)].upper() == prefix.upper() for member in unit["members"]):
+        fail(f"{name}: every own-folders-by-prefix member begins with the unit's prefix")
 
 
 def _validate_file_groups(name: str, file_set: Any) -> None:

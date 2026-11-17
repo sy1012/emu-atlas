@@ -81,6 +81,8 @@ def fixture_machine(inp) -> FixtureMachine:
         dolphin_discs=inp.get("dolphin_discs"),
         switch_packages=inp.get("switch_packages"),
         eden_profiles=inp.get("eden_profiles"),
+        psp_discs=inp.get("psp_discs"),
+        psp_param_sfos=inp.get("psp_param_sfos"),
         disc_identities=inp.get("disc_identities"),
         archive_texts=inp.get("archive_texts"),
         archives=inp.get("archives"),

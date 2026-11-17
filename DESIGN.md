@@ -276,6 +276,11 @@ class Machine(Protocol):
   the right name may still be the wrong dump. `file_size` is the free pre-filter that settles most mismatches before any
   bytes are hashed; `file_digest` is the paid answer, and the algorithm vocabulary is closed to `md5`/`sha1` so a port's
   conformance is provable.
+- Beside those, the seam carries the reads that establish a game's identity from its content's bytes — a PlayStation
+  disc's licence and `SYSTEM.CNF`, a Dolphin disc's header and ticket, a Switch package's PFS0 names, a PSP disc's
+  `DISC_ID` and a PSP savedata folder's `PARAM.SFO` keys — each bounded, each with its own closed status, and each a
+  modelled input in a fixture (`dolphin_discs`, `switch_packages`, `psp_discs`, `psp_param_sfos`, …) rather than an
+  image carried in a test: the facts sit inside files no fixture should hold.
 - The seam reads the host, but the configs it reads were written from inside a sandbox: a Flatpak'd emulator spells its
   own paths `/app/...` and `/var/config/...` (the live RetroDECK cfg puts its override directory there). Every
   cfg-derived path is therefore translated to its host location before it becomes a read, per app id; a sandbox-only

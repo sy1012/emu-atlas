@@ -8973,6 +8973,18 @@ class _CountingMachine:
     def read_dolphin_disc(self, path):
         return self._inner.read_dolphin_disc(path)
 
+    def read_switch_package(self, path):
+        return self._inner.read_switch_package(path)
+
+    def read_eden_profiles(self, path):
+        return self._inner.read_eden_profiles(path)
+
+    def read_psp_disc(self, path):
+        return self._inner.read_psp_disc(path)
+
+    def read_psp_param_sfo(self, path):
+        return self._inner.read_psp_param_sfo(path)
+
     def read_disc_identity(self, path, *, extracted=None):
         return self._inner.read_disc_identity(path, extracted=extracted)
 

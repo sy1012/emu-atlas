@@ -1359,6 +1359,7 @@ answer names the folder with `file-names-unestablished` and no file names.
 | `file-set-spans-roots`                     | part of the save stays under `data["dir"]` (`data["files"]`) — also in `groups` when declared                                                                    |
 | `file-names-unestablished`                 | save data lives in `data["dir"]` and its names follow from nothing atlas reads — back it up whole                                                                |
 | `file-membership-by-header`                | a file of `data["dir"]` is the game's when its bytes at `offset`, `length` long, equal the `save_id` fill or `game_code` — Dolphin's GCI folder, below           |
+| `psn-save-prefix-may-differ`               | the unit matches by a PlayStation Network id (`data["prefix"]`); the game may save under its disc release's id instead                                           |
 | `redirect-outranked`                       | this machine's configuration outranks a stated redirect route, or makes it not apply (`data["argument"]`, `data["key"]`) — below                                 |
 | `save-id-candidates`                       | the title directories the NAND holds, each spelled as the `save_id` it fills (`data["titles"]`) — below                                                          |
 | `file-set-claims-merged`                   | two parts of the answer named one file and disagreed; it is one group, `data` lists what each said                                                               |
@@ -1608,9 +1609,11 @@ of eight lowercase hex digits joined by `/`, such as `00010000/524d4745` — Cem
 Wii answer), `path-segment` (one segment naming an entry of its own — never empty, `.` or `..`, and never holding `/` or
 a NUL — Flycast, SwanStation, DuckStation's per-game cards, PCSX2's texture directory) or `game-code` (exactly four
 ASCII characters, each an uppercase letter or a digit — the GameCube game code Dolphin's and PrimeHack's GCI folder
-compares, where a whole six-character game id fails). It rides wherever `save_id` does and nowhere else, and an answer
-carries a `save_id` fill exactly where it carries the `<save_id>` hole — in `needs`, or in a path or file name a caveat
-states. `atlas.checked_save_id(spelling, value)` returns the value or raises `ValueError`; a Wii disc's low word alone
+compares, where a whole six-character game id fails) or `psp-game-id` (four ASCII uppercase letters and five digits,
+such as `ULUS10064` — the PSP game id PPSSPP's savedata folders begin with, a prefix of their names rather than a whole
+name). It rides wherever `save_id` does and nowhere else, and an answer carries a `save_id` fill exactly where it
+carries the `<save_id>` hole — in `needs`, or in a path or file name a caveat states.
+`atlas.checked_save_id(spelling, value)` returns the value or raises `ValueError`; a Wii disc's low word alone
 (`524d4745`) fails `title-id-words`, which is the point, and a `..` fails `path-segment`, so a checked value never leads
 a write out of the directory it fills.
 
@@ -1781,12 +1784,33 @@ disc's TMD), with nothing in `needs`. For a GameCube disc in a GCI-folder slot, 
 derived — picks the one folder, and the `.gci` files directly in it whose first four bytes are the disc's game code are
 listed; `needs` is empty, and `file-membership-by-header` carries `game_code` instead of the `save_id` fill. A raw card
 stays the shared card it is. In both answers the group carries `unit`, the explicit statement a sync client acts on:
-`unit.kind == "folder"` says the group's directory is the game's save whole, and `unit.archive_folder` (the Wii low
-word) is the folder an archive keeps its entries under — `<lo>/data/…`; `unit.kind == "members"` says the files
+`unit.kind == "own-folder"` says the group's directory is the game's save whole, and `unit.archive_folder` (the Wii low
+word) is the folder an archive keeps its entries under — `<lo>/data/…`; `unit.kind == "own-files"` says the files
 `unit.members` names in the shared directory are the game's save — possibly none, on a fresh card — and `archive_folder`
 is `None`, the archive flat. `unit` is `None` on every other group, whatever its granularity says: RPCS3's
 `per-game-directory` answer names the parent of every title's folder. A disc that does not read, one of the other
 platform, or a GameCube region nothing read establishes, leaves the answer and its holes as they are without one.
+
+**Name the disc, and PPSSPP's answer names the game's folders.** A PSP game saves in folders directly below
+`PSP/SAVEDATA` whose names begin with the name it hands the savedata utility — by the platform's convention its own id,
+`ULUS10064DATA00` beside `ULUS10064SETTINGS` — so one game's save is several sibling folders in a directory every game
+shares. Ask with `content_path=` naming a plain ISO and atlas reads `DISC_ID` from the image's `PSP_GAME/PARAM.SFO`, the
+id PPSSPP loads for the disc (`atlas/psp_disc.py`), normalised to nine characters (`ULUS-10064` loses its dash). The
+group then carries `unit.kind == "own-folders-by-prefix"` with `unit.prefix` the id: the game's save is the directories
+in SAVEDATA whose names begin with it, ASCII case aside, and `unit.members` lists the ones there now — possibly none,
+for a game that has not saved yet, so a restore onto a fresh machine still has a unit to place. A folder beginning with
+the prefix whose `PARAM.SFO` carries neither `SAVEDATA_FILE_LIST` nor `SAVEDATA_PARAMS` is a game-data install, not a
+save (every savedata write sets both, an install neither; `CATEGORY` is `MS` on both and tells nothing), and is left out
+of `members` — a restore removes the members and nothing else, then places the folders it carries; an upload packs each
+member at the archive's top level, `<member>/…` (`archive_folder` is `None`). A folder with no `PARAM.SFO` is a member,
+since an install always writes one. Where SAVEDATA, a matching folder or its `PARAM.SFO` cannot be read, or a
+`PARAM.SFO` does not parse, no unit is stated: a client never removes a folder on a guess. Without a disc atlas reads —
+no `content_path`, a CSO, PBP or CHD (containers PPSSPP opens and atlas does not), an image without
+`PSP_GAME/PARAM.SFO`, an id that is not four letters and five digits — or where the folders were not established, the
+answer keeps `needs: ('save_id',)`, and `file-names-unestablished` states the fill, spelled `psp-game-id`. The prefix is
+the game's choice, not the emulator's: a PlayStation Network release (an `NP…` id) may save under its disc release's id
+instead (`NPJH50804` saves as `ULJS00445`), and `psn-save-prefix-may-differ` says so beside such a unit; atlas keeps no
+table that re-keys it.
 
 **A GameCube card atlas cannot reach is not an empty slot.** A slot whose card path only the emulator's sandbox can
 spell still holds the card the emulator writes to — whether those writes are kept cannot be told from here — and the
@@ -1923,16 +1947,16 @@ a subtler reason: `[Filenames] BIOS` really is a layered key, but the only read 
 _before_ the layer for that game is installed, and nothing re-reads it afterwards. A key being layered is not the same
 as its consumer running after the layer arrives — which is why DuckStation's BIOS answer speaks and PCSX2's does not.
 
-Three more cards follow the same shapes. PPSSPP is one unnamed savedata directory per game below the memstick's
-`PSP/SAVEDATA`. Cemu keys the per-title unit: `dir` is `usr/save/<save_id>` below the MLC — the MLC resolved the way the
-emulator resolves it (an `--mlc` launch flag outranks `settings.xml`, and the answer says so when it sees one) — with
-`needs: ('save_id',)`, granularity `per-game-directory`, and the caveat spelling the fill (the title id, high then low
-word, each 8 lowercase hex digits, as two path segments) with its citation. That unit is what a per-game sync client
-moves whole — the directory-based save shape rommapp/romm#3866 asks for. xemu is the boundary case: every game's save
-lives **inside** the emulated Xbox hard disk, so the answer names the image as one shared file and `save-inside-image`
-carries the inside layout machine-readably (`data["layout"]` is `UDATA/<title id>`) — a file-level client backs the
-image up whole or leaves it, a tool that parses FATX has the layout stated instead of rediscovered, and per-game sync is
-honestly not on offer from outside.
+Three more cards follow the same shapes. PPSSPP keeps a game's saves in folders directly below the memstick's
+`PSP/SAVEDATA`, named `<game id><save name>` by the game itself (below). Cemu keys the per-title unit: `dir` is
+`usr/save/<save_id>` below the MLC — the MLC resolved the way the emulator resolves it (an `--mlc` launch flag outranks
+`settings.xml`, and the answer says so when it sees one) — with `needs: ('save_id',)`, granularity `per-game-directory`,
+and the caveat spelling the fill (the title id, high then low word, each 8 lowercase hex digits, as two path segments)
+with its citation. That unit is what a per-game sync client moves whole — the directory-based save shape
+rommapp/romm#3866 asks for. xemu is the boundary case: every game's save lives **inside** the emulated Xbox hard disk,
+so the answer names the image as one shared file and `save-inside-image` carries the inside layout machine-readably
+(`data["layout"]` is `UDATA/<title id>`) — a file-level client backs the image up whole or leaves it, a tool that parses
+FATX has the layout stated instead of rediscovered, and per-game sync is honestly not on offer from outside.
 
 Vita3K's tree hangs off one key, `pref-path`, with saves at `ux0/user/<user>/savedata` — the same per-user shape as
 RPCS3, and an empty `pref-path` is a refusal rather than a guess, because the emulator falls back to a default it

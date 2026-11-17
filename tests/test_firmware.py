@@ -158,6 +158,10 @@ from atlas.machine import (
     ArchiveListResult,
     Ps2BiosHeaderResult,
     DolphinDiscResult,
+    EdenProfilesResult,
+    PspDiscResult,
+    PspParamSfoResult,
+    SwitchPackageResult,
     Ps3FileResult,
     ReadResult,
     WhdloadSlaveResult,
@@ -6128,6 +6132,22 @@ class _CountingMachine:
     def read_dolphin_disc(self, path: str) -> DolphinDiscResult:
         self._count("read_dolphin_disc")
         return self._inner.read_dolphin_disc(path)
+
+    def read_switch_package(self, path: str) -> SwitchPackageResult:
+        self._count("read_switch_package")
+        return self._inner.read_switch_package(path)
+
+    def read_eden_profiles(self, path: str) -> EdenProfilesResult:
+        self._count("read_eden_profiles")
+        return self._inner.read_eden_profiles(path)
+
+    def read_psp_disc(self, path: str) -> PspDiscResult:
+        self._count("read_psp_disc")
+        return self._inner.read_psp_disc(path)
+
+    def read_psp_param_sfo(self, path: str) -> PspParamSfoResult:
+        self._count("read_psp_param_sfo")
+        return self._inner.read_psp_param_sfo(path)
 
     def read_disc_identity(self, path: str, *, extracted: ExtractedEntry | None = None) -> DiscIdentityResult:
         self._count("read_disc_identity")
