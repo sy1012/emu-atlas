@@ -317,6 +317,43 @@ A machine can carry several arrangements at once; each answers only for itself (
 `kinds` can carry more than one description — EmuDeck _is_ a configured RetroArch Flatpak, so its handle claims both. An
 empty list means nothing was detected.
 
+### A standalone Eden AppImage — `eden_appimage`
+
+Eden, the Switch emulator, is often run as the one AppImage the user downloaded, with no frontend around it. atlas
+detects it as its own arrangement, `eden_appimage` (`atlas.EdenAppImage`, last in probe order):
+
+```python
+installations = atlas.detect(home, eden_appimage="/home/deck/Applications/Eden.AppImage")  # named
+installations = atlas.detect(home)  # searched: ~/Applications, ~/AppImages, ~/Emulation/tools, ~/.local/bin
+```
+
+A named AppImage wins and is the installation whether or not it is there — a named file that is missing is a handle
+whose health says `marker-missing`, and a relative name raises `ValueError`. Unnamed, a file named `eden*.appimage`
+(case-insensitive) in one of those folders is found; several found are never picked between: the health states
+`appimage-ambiguous` with the `candidates`, the entry is `unestablished` for that reason, and the launch refuses — name
+the one that runs. `every_installation` takes the same keyword.
+
+There is no catalogue to read, so the handle answers `switch` with one entry of its own: `kind` `standalone`, `label`
+`Eden (AppImage)`, `emulator` `EDEN` (ES-DE's own name for the emulator, so it joins a frontend's Eden entry),
+`startable` with the AppImage as its launcher. Its `launch_command` is the AppImage with `-f -g <content>`
+(`program.variant` `appimage`), no environment, an empty `distribution_environment`, and the AppImage's own folder as
+the working folder: a `user` directory there is Eden's whole data tree (portable mode), and atlas resolves the trees
+from that same folder, otherwise from `~/.local/share/eden` and `~/.config/eden`. `launchable` takes the extensions
+Eden's loader names (`.nsp`, `.xci`, `.nca`, `.nro`, `.nso`, `.kip`) with `entry-format-content-unread` — Eden decides
+by the file's bytes — and answers `unknown` for the rest.
+
+The entry's save is one game's own folder, `<save root>/user/save/0000000000000000/<user>/<application id>`, stated as
+`unit.kind == "own-folder"` with the application id as `archive_folder`. The save root is the NAND, or the
+`[Data%20Storage]` `save_directory` of `qt-config.ini` where it is set and a directory; `nand_directory` moves the NAND.
+The user is the one `profiles.dat` lists at the `[System] current_user` index (the first where that index holds none);
+the application id comes from the content — a `[01…]` tag in its name, else the tickets its NSP or NSZ header lists,
+else the tags of the other files in its folder (a RomM multi-file game) — and an update's or add-on's id is taken back
+to its application. Either one not established is a hole: `profile_id` beside `active-profile-unestablished` (Eden
+creates a fresh user where `profiles.dat` is missing, short or empty, so no existing folder is its; the caveat lists the
+user folders found), and `save_id` beside `file-names-unestablished`, spelled `path-segment`, sixteen uppercase hex
+digits. Two AppImages that put the trees in different places refuse the save with `appimage-ambiguous`. Firmware and
+keys are not read: the entry's firmware declaration is `unsupported`.
+
 ### The name to show a person — `label`
 
 `kind` is an identifier and reads like one. When you put it in front of a user, ask atlas for the name the project

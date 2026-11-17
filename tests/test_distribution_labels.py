@@ -63,7 +63,7 @@ def _handle_kinds() -> set[str]:
 
 class TestThePackagedTable:
     def test_the_projects_spell_themselves(self):
-        # The four spellings, written out: this is the file's whole content, and
+        # The five spellings, written out: this is the file's whole content, and
         # a change to one is a change a person makes on purpose after reading
         # the project's own text again.
         labels = {kind: record.label for kind, record in load_distribution_labels().items()}
@@ -72,6 +72,7 @@ class TestThePackagedTable:
             "emudeck": "EmuDeck",
             "bare_retroarch_flatpak": "RetroArch (Flatpak)",
             "bare_retroarch_native": "RetroArch (native)",
+            "eden_appimage": "Eden (AppImage)",
         }
 
     def test_every_entry_cites_where_its_spelling_was_read(self):

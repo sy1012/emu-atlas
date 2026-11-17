@@ -511,14 +511,16 @@ class TestOnlyTheReadingsThatEstablishItStateIt:
                 answers.append((query.get("system"), answer))
         return answers
 
-    def test_no_vector_outside_gamecube_and_wii_states_a_unit(self):
+    def test_no_vector_outside_the_reading_systems_states_a_unit(self):
+        # GameCube and Wii by Dolphin's disc reads; Switch by Eden's, which
+        # names the application and the active user.
         stated = [
             system
             for system, answer in self._answers()
             for group in (answer.get("file_set") or {}).get("groups", [])
             if group["unit"] is not None
         ]
-        assert stated and set(stated) <= {"gc", "wii"}
+        assert stated and set(stated) <= {"gc", "wii", "switch"}
 
     @pytest.mark.parametrize("system", ["ps3", "wiiu", "n3ds"])
     def test_rpcs3_cemu_and_azahar_answer_per_game_directories_with_no_unit(self, system):

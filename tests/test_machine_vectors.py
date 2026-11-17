@@ -78,6 +78,8 @@ def fixture_machine(inp) -> FixtureMachine:
         ps2_bios_headers=inp.get("ps2_bios_headers"),
         ps3_files=inp.get("ps3_files"),
         dolphin_discs=inp.get("dolphin_discs"),
+        switch_packages=inp.get("switch_packages"),
+        eden_profiles=inp.get("eden_profiles"),
         disc_identities=inp.get("disc_identities"),
         archive_texts=inp.get("archive_texts"),
         archives=inp.get("archives"),

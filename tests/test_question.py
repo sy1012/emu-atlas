@@ -385,6 +385,7 @@ class TestEveryPublicMethodIsOneQuestion:
             atlas.EmuDeck,
             atlas.BareRetroArchNative,
             atlas.BareRetroArchFlatpak,
+            atlas.EdenAppImage,
             atlas.EmulatorEntry,
         ],
     )

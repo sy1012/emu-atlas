@@ -235,6 +235,7 @@ def _machine(files, **kwargs) -> FixtureMachine:
 UNVERIFIED_MACHINES = {
     "bare_retroarch_flatpak": ({STANDALONE_CFG: ""}, {}),
     "bare_retroarch_native": ({NATIVE_CFG: ""}, {}),
+    "eden_appimage": ({f"{HOME}/Applications/Eden.AppImage": {"size": 1}}, {}),
 }
 
 
@@ -289,7 +290,34 @@ VERIFIED_FIXTURES = {
 }
 
 
-def _answers(handle) -> dict[str, tuple[str, ...]]:
+# The core-route questions a standalone Eden AppImage refuses: it loads no
+# libretro core and runs no RetroArch, so each answers a refusal, which states
+# no evidence of its own (an Unresolved carries no caveats).
+_EDEN_CORE_REFUSALS = (
+    "savefile_location",
+    "savestate_location",
+    "screenshot_location",
+    "texture_pack_location",
+    "mod_location",
+    "soft_patch_candidates",
+)
+
+
+def _eden_answers(handle) -> dict[str, tuple[str, ...]]:
+    """:func:`_answers` for the Eden handle: its core-route refusals checked as such, the rest asked as usual."""
+    refusals = {
+        "savefile_location": handle.savefile_location(core_so=CORE_SO),
+        "savestate_location": handle.savestate_location(core_so=CORE_SO),
+        "screenshot_location": handle.screenshot_location(core_so=CORE_SO),
+        "texture_pack_location": handle.texture_pack_location(core_so=TEXTURE_CORE_SO),
+        "mod_location": handle.mod_location(core_so=MOD_CORE_SO),
+        "soft_patch_candidates": handle.soft_patch_candidates("/roms/gb/Game.gb"),
+    }
+    assert all(isinstance(answer, atlas.Unresolved) for answer in refusals.values())
+    return _answers(handle, skip=_EDEN_CORE_REFUSALS)
+
+
+def _answers(handle, skip: tuple[str, ...] = ()) -> dict[str, tuple[str, ...]]:
     """Every question of the protocol that answers with caveats, asked once.
 
     ``health`` is deliberately absent: its issues are machine defects, and
@@ -297,40 +325,41 @@ def _answers(handle) -> dict[str, tuple[str, ...]]:
     report a working installation as broken. :class:`TestHealthStaysAMachineFact`
     holds that decision down.
     """
-    return {
-        "savefile_location": tuple(c.code for c in placed(handle.savefile_location(core_so=CORE_SO)).caveats),
-        "savestate_location": tuple(c.code for c in state_placed(handle.savestate_location(core_so=CORE_SO)).caveats),
-        "screenshot_location": tuple(
+    questions = {
+        "savefile_location": lambda: tuple(c.code for c in placed(handle.savefile_location(core_so=CORE_SO)).caveats),
+        "savestate_location": lambda: tuple(c.code for c in state_placed(handle.savestate_location(core_so=CORE_SO)).caveats),
+        "screenshot_location": lambda: tuple(
             c.code for c in screenshot_placed(handle.screenshot_location(core_so=CORE_SO)).caveats
         ),
-        "texture_pack_location": tuple(
+        "texture_pack_location": lambda: tuple(
             c.code
             for c in texture_placed(handle.texture_pack_location(core_so=TEXTURE_CORE_SO)).caveats
         ),
-        "mod_location": tuple(
+        "mod_location": lambda: tuple(
             c.code for c in mod_placed(handle.mod_location(core_so=MOD_CORE_SO)).caveats
         ),
         # The one question whose subject is the content rather than an
         # emulator; it still answers about the arrangement's own RetroArch, so
         # it states the arrangement's evidence like every other question here.
-        "soft_patch_candidates": tuple(
+        "soft_patch_candidates": lambda: tuple(
             c.code for c in handle.soft_patch_candidates("/roms/gb/Game.gb").caveats
         ),
-        "systems": tuple(c.code for c in handle.systems().caveats),
-        "systems_for_platform": tuple(
+        "systems": lambda: tuple(c.code for c in handle.systems().caveats),
+        "systems_for_platform": lambda: tuple(
             c.code for c in handle.systems_for_platform("igdb", "gb").caveats
         ),
-        "platform_ids": tuple(c.code for c in handle.platform_ids(SYSTEM).caveats),
-        "emulators_for": tuple(c.code for c in handle.emulators_for(SYSTEM).caveats),
-        "launchable": tuple(c.code for c in handle.launchable(SYSTEM, "/roms/gb/Game.gb").caveats),
-        "launch_command": tuple(c.code for c in handle.launch_command(SYSTEM, "/roms/gb/Game.gb").caveats),
-        "rom_location": tuple(c.code for c in handle.rom_location(SYSTEM).caveats),
-        "rom_locations": tuple(c.code for c in handle.rom_locations().caveats),
-        "firmware_for_core": tuple(c.code for c in handle.firmware_for_core(core_so=CORE_SO).caveats),
-        "firmware_for_system": tuple(c.code for c in handle.firmware_for_system(system=SYSTEM).caveats),
-        "firmware_inventory": tuple(c.code for c in handle.firmware_inventory().caveats),
-        "identify_firmware": tuple(c.code for c in handle.identify_firmware(md5="deadbeef").caveats),
+        "platform_ids": lambda: tuple(c.code for c in handle.platform_ids(SYSTEM).caveats),
+        "emulators_for": lambda: tuple(c.code for c in handle.emulators_for(SYSTEM).caveats),
+        "launchable": lambda: tuple(c.code for c in handle.launchable(SYSTEM, "/roms/gb/Game.gb").caveats),
+        "launch_command": lambda: tuple(c.code for c in handle.launch_command(SYSTEM, "/roms/gb/Game.gb").caveats),
+        "rom_location": lambda: tuple(c.code for c in handle.rom_location(SYSTEM).caveats),
+        "rom_locations": lambda: tuple(c.code for c in handle.rom_locations().caveats),
+        "firmware_for_core": lambda: tuple(c.code for c in handle.firmware_for_core(core_so=CORE_SO).caveats),
+        "firmware_for_system": lambda: tuple(c.code for c in handle.firmware_for_system(system=SYSTEM).caveats),
+        "firmware_inventory": lambda: tuple(c.code for c in handle.firmware_inventory().caveats),
+        "identify_firmware": lambda: tuple(c.code for c in handle.identify_firmware(md5="deadbeef").caveats),
     }
+    return {question: ask() for question, ask in questions.items() if question not in skip}
 
 
 class TestEveryAnswerStatesItsEvidence:
@@ -350,9 +379,10 @@ class TestEveryAnswerStatesItsEvidence:
     def test_every_question_of_an_unverified_arrangement_says_so(self, kind):
         files, kwargs = UNVERIFIED_MACHINES[kind]
         handle = atlas.detect(HOME, _machine(files, **kwargs))[0]
+        answers = _eden_answers(handle) if kind == atlas.EdenAppImage.kind else _answers(handle)
         silent = sorted(
             question
-            for question, codes in _answers(handle).items()
+            for question, codes in answers.items()
             if CAVEAT_ARRANGEMENT_UNVERIFIED not in codes
         )
         assert silent == []

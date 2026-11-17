@@ -44,6 +44,8 @@ INPUT_FIELDS_OPTIONAL = {
     "ps2_bios_headers",
     "ps3_files",
     "dolphin_discs",
+    "switch_packages",
+    "eden_profiles",
     "disc_identities",
     "archives",
     "archive_texts",
@@ -476,6 +478,8 @@ LAUNCH_REASONS = {
     "find-rules-unreadable": "unestablished",
     "launch-resolution-unsupported": "unestablished",
     "launch-path-unestablished": "unestablished",
+    # Several Eden AppImages found and none named: which one runs is not established.
+    "appimage-ambiguous": "unestablished",
 }
 # The three ways a catalogue answer carries no entries, each a different claim:
 # the arrangement has none, its one could not be read, or atlas has not
@@ -502,6 +506,7 @@ KNOWN_DISTRIBUTION_LABELS = {
     "emudeck": "EmuDeck",
     "bare_retroarch_flatpak": "RetroArch (Flatpak)",
     "bare_retroarch_native": "RetroArch (native)",
+    "eden_appimage": "Eden (AppImage)",
 }
 KNOWN_KINDS = set(KNOWN_DISTRIBUTION_LABELS)
 KNOWN_FILE_STATUSES = {"unreadable", "invalid-text"}
@@ -523,6 +528,8 @@ KNOWN_HEALTH_ISSUES = {
     # RetroDECK's own retroarch.cfg is not there — the standalone routes' code
     # for a missing settings file, stated here as a finding.
     "emulator-config-missing",
+    # More than one Eden AppImage found and none named.
+    "appimage-ambiguous",
 }
 KNOWN_ROOT_KINDS = {
     "savefile_directory",
@@ -547,7 +554,7 @@ KNOWN_STATE_ROOT_KINDS = {
 # sharpest reason of them all: a hole nobody can fill is worse than a stated
 # unknown, because a client reads it as work it is supposed to do. Nothing a
 # config states belongs here either; that is atlas's own to resolve.
-KNOWN_HOLES = {"content_dir", "content_dir_name", "cwd", "library_name", "region", "rom_stem", "save_id"}
+KNOWN_HOLES = {"content_dir", "content_dir_name", "cwd", "library_name", "profile_id", "region", "rom_stem", "save_id"}
 # How a ``save_id`` fill is spelled — the value of a caveat's
 # ``save_id_spelling``, which rides beside its ``save_id`` fill sentence.
 KNOWN_SAVE_ID_SPELLINGS = {"title-id-words", "path-segment", "game-code"}
@@ -727,6 +734,8 @@ KNOWN_CAVEAT_CODES = {
     "save-root-unresolvable",
     "save-dir-unlistable",
     "save-id-candidates",
+    "active-profile-unestablished",
+    "appimage-ambiguous",
     "emulator-read-unestablished",
     "emulator-config-unread",
     "feature-switch-absent",
@@ -814,6 +823,7 @@ KNOWN_UNRESOLVED_CODES = {
     "emulator-config-path-untranslatable",
     "slot-device-uninterpreted",
     "not-set-up",
+    "appimage-ambiguous",
 }
 
 
@@ -1354,6 +1364,8 @@ def _validate_input(name: str, inp: Any) -> None:
     _validate_input_ps2_bios_headers(name, inp.get("ps2_bios_headers", {}), inp["files"])
     _validate_input_ps3_files(name, inp.get("ps3_files", {}), inp["files"])
     _validate_input_dolphin_discs(name, inp.get("dolphin_discs", {}), inp["files"])
+    _validate_input_switch_packages(name, inp.get("switch_packages", {}), inp["files"])
+    _validate_input_eden_profiles(name, inp.get("eden_profiles", {}), inp["files"])
     _validate_input_archives(name, inp.get("archives", {}), inp["files"])
     _validate_input_disc_identities(name, inp.get("disc_identities", {}), inp["files"], inp.get("archives", {}))
     _validate_input_archive_texts(name, inp.get("archive_texts", {}), inp.get("archives", {}))
@@ -1536,6 +1548,56 @@ def _validate_input_dolphin_discs(name: str, declared: Any, files: Any) -> None:
         if isinstance(spec, str) and spec in DOLPHIN_DISC_STATES:
             continue
         _validate_dolphin_disc_spec(name, path, spec)
+
+
+# switch_packages: the path of a Switch package `files` declares -> the file
+# names its PFS0 header lists, or "not-a-package". A declared file with no
+# entry answers "unreadable".
+SWITCH_PACKAGE_STATES = {"not-a-package"}
+# eden_profiles: the path of an Eden profiles.dat `files` declares -> the UUIDs
+# of the users it lists (at most eight, each thirty-two lowercase hex digits,
+# not all zero), or "short".
+EDEN_PROFILES_STATES = {"short"}
+
+
+def _declared_readable(name: str, what: str, path: Any, files: Any) -> None:
+    if not isinstance(path, str) or path not in files:
+        fail(f"{name}: {what} {path!r} must name a declared file")
+    file_spec = files[path]
+    if isinstance(file_spec, dict) and file_spec.get("status") == "unreadable":
+        fail(f"{name}: {what} {path!r} sits on an unreadable file, whose bytes state nothing")
+
+
+def _validate_input_switch_packages(name: str, declared: Any, files: Any) -> None:
+    if not isinstance(declared, dict):
+        fail(f"{name}: input.switch_packages must be an object")
+    for path, spec in declared.items():
+        _declared_readable(name, "switch package", path, files)
+        if isinstance(spec, str) and spec in SWITCH_PACKAGE_STATES:
+            continue
+        if not isinstance(spec, list) or not all(isinstance(entry, str) for entry in spec):
+            fail(f"{name}: switch package {path!r} must be 'not-a-package' or a list of file names")
+
+
+def _validate_input_eden_profiles(name: str, declared: Any, files: Any) -> None:
+    if not isinstance(declared, dict):
+        fail(f"{name}: input.eden_profiles must be an object")
+    for path, spec in declared.items():
+        _declared_readable(name, "eden profiles", path, files)
+        if isinstance(spec, str) and spec in EDEN_PROFILES_STATES:
+            continue
+        if (
+            not isinstance(spec, list)
+            or len(spec) > 8
+            or not all(
+                isinstance(uuid, str) and re.fullmatch("[0-9a-f]{32}", uuid) is not None and uuid != "0" * 32
+                for uuid in spec
+            )
+        ):
+            fail(
+                f"{name}: eden profiles {path!r} must be 'short' or at most eight UUIDs of thirty-two "
+                "lowercase hex digits, not all zero"
+            )
 
 
 def _is_number(value: Any, bits: int) -> bool:
