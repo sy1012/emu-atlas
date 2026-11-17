@@ -378,6 +378,12 @@ AppImage, else `~/.config/eden`):
   `extra-content-scanned-beside-launch` with those `folders`. The `SDMC`, `UserNAND` and `SysNAND` rows are installed
   content, not folders, and are left out.
 
+What a device showed, against that reading (a Steam Deck, an Eden AppImage, a game started with `-g` from Steam): a
+game's DLC lying in the game's own folder, below a game folder with `deep_scan` set, was applied — the scan beside the
+launch registered it in time. The same folder listed in `external_content_dirs`, while the game folder's `deep_scan` was
+off, did not get the DLC applied. The fields above still state what the source shows; a consumer advising a user names
+the deep-scanned game folder.
+
 Both scans read `.nsp` and `.xci` packages only (`extensions`); an `.nsz` or `.xcz` there is not read. A relative folder
 is below the AppImage's folder, the launch's working directory. The content's own folder is the folder the content lies
 in, or the content itself where it is a folder (RomM's layout for a game kept with its update and add-ons); it is
