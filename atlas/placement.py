@@ -1505,12 +1505,12 @@ class SizeFact:
 
 # What a :class:`SaveUnitStatement` says a group's directory is to one game:
 # the whole folder its save, or a named few of the files a shared folder holds.
-SaveUnitKind = Literal["folder", "members"]
-SAVE_UNIT_FOLDER: SaveUnitKind = "folder"
+SaveUnitKind = Literal["own-folder", "own-files"]
+SAVE_UNIT_FOLDER: SaveUnitKind = "own-folder"
 """The group's directory is this game's own save, whole: everything below it is the game's, and
 nothing of another game's lies there — a client moves the directory as one unit.
 """
-SAVE_UNIT_MEMBERS: SaveUnitKind = "members"
+SAVE_UNIT_MEMBERS: SaveUnitKind = "own-files"
 """The group's directory is shared, and the files ``members`` names in it, directly in it, are this
 game's own save — every other file there is another game's, and the list may be empty where the
 game has not saved yet.
@@ -1556,7 +1556,7 @@ class SaveUnitStatement:
         if self.kind not in SAVE_UNIT_KINDS:
             raise ValueError(f"SaveUnitStatement: kind must be one of {SAVE_UNIT_KINDS}, got {self.kind!r}")
         if (self.members is None) != (self.kind == SAVE_UNIT_FOLDER):
-            raise ValueError("SaveUnitStatement: members are stated exactly when kind is 'members'")
+            raise ValueError("SaveUnitStatement: members are stated exactly when kind is 'own-files'")
         for name in (*(self.members or ()), *((self.archive_folder,) if self.archive_folder is not None else ())):
             if name in _NOT_AN_ENTRY or "/" in name or "\0" in name:
                 raise ValueError(

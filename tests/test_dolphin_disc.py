@@ -245,11 +245,11 @@ class TestTheStatement:
     @pytest.mark.parametrize(
         ("kind", "members", "archive"),
         [
-            ("folder", ("a.gci",), None),
-            ("members", None, None),
-            ("members", ("../a.gci",), None),
-            ("members", ("a.gci", "a.gci"), None),
-            ("folder", None, ".."),
+            ("own-folder", ("a.gci",), None),
+            ("own-files", None, None),
+            ("own-files", ("../a.gci",), None),
+            ("own-files", ("a.gci", "a.gci"), None),
+            ("own-folder", None, ".."),
             ("disc", None, None),
         ],
     )
@@ -414,7 +414,7 @@ class TestTheStandaloneGameCubeAnswer:
     def test_the_statement_serializes_on_its_group(self):
         p = _answer("gc", discs=GALE, files={f"{USA_A}/01-GALE-a.gci": _gci(b"GALE")})
         group = savefile_placement_contract(p)["file_set"]["groups"][0]
-        assert group["unit"] == {"kind": "members", "members": ["01-GALE-a.gci"], "archive_folder": None}
+        assert group["unit"] == {"kind": "own-files", "members": ["01-GALE-a.gci"], "archive_folder": None}
 
 
 class TestTheStandaloneWiiAnswer:

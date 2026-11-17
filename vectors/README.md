@@ -351,9 +351,9 @@ Two rules decide what belongs in a vector:
   claim; every entry of `file_set.groups` carries `size_fixed` — `true`, `false`, or `null` where the size was not
   established — and the validator refuses a group without it, because a port that leaves the key out has answered a
   question about the file's size by silence; every entry carries `unit` too — `null`, or the statement that the group's
-  directory is the asked game's own save, `{"kind": "folder", "members": null, "archive_folder": …}`, or that the files
-  `members` names in it are, `{"kind": "members", "members": […], "archive_folder": …}` — set only where a reading
-  established it, never read off the granularity;
+  directory is the asked game's own save, `{"kind": "own-folder", "members": null, "archive_folder": …}`, or that the
+  files `members` names in it are, `{"kind": "own-files", "members": […], "archive_folder": …}` — set only where a
+  reading established it, never read off the granularity;
 - **prose is not** — `sources`, caveat `message` and the `*provenance` fields are for humans and change freely, so they
   are not serialized and not asserted.
 

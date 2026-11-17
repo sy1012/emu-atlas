@@ -283,7 +283,7 @@ FILE_GROUP_FIELDS = {"dir", "files", "granularity", "role", "size_fixed", "unit"
 # The statement that a group's folder, or named files in it, are one game's own
 # save (atlas.placement.SaveUnitStatement): its fields and its two kinds.
 SAVE_UNIT_FIELDS = {"kind", "members", "archive_folder"}
-KNOWN_SAVE_UNIT_KINDS = {"folder", "members"}
+KNOWN_SAVE_UNIT_KINDS = {"own-folder", "own-files"}
 # The byte a fixed-size save may be padded with at its end
 # (size-fixed-except-trailing-fill's data["fill"]).
 KNOWN_SIZE_FILLS = {"0xff", "0x00"}
@@ -2106,7 +2106,7 @@ def _validate_save_unit(name: str, unit: Any) -> None:
     if unit["kind"] not in KNOWN_SAVE_UNIT_KINDS:
         fail(f"{name}: file group unit kind must be one of {sorted(KNOWN_SAVE_UNIT_KINDS)}")
     members = unit["members"]
-    if (members is None) != (unit["kind"] == "folder"):
+    if (members is None) != (unit["kind"] == "own-folder"):
         fail(f"{name}: a file group unit states members exactly when its kind is members")
     if members is not None and (
         not isinstance(members, list)

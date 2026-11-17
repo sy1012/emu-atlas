@@ -31313,7 +31313,7 @@
                 "role": "memory-card",
                 "size_fixed": false,
                 "unit": {
-                  "kind": "members",
+                  "kind": "own-files",
                   "members": [
                     "01-GALE-SuperSmashBros0110290334.gci"
                   ],
@@ -31592,7 +31592,7 @@
                 "role": "memory-card",
                 "size_fixed": false,
                 "unit": {
-                  "kind": "members",
+                  "kind": "own-files",
                   "members": [],
                   "archive_folder": null
                 }
@@ -32211,7 +32211,7 @@
                 "role": "battery",
                 "size_fixed": false,
                 "unit": {
-                  "kind": "folder",
+                  "kind": "own-folder",
                   "members": null,
                   "archive_folder": "52534245"
                 }
@@ -32421,7 +32421,7 @@
                 "role": "battery",
                 "size_fixed": false,
                 "unit": {
-                  "kind": "folder",
+                  "kind": "own-folder",
                   "members": null,
                   "archive_folder": "52464e45"
                 }
@@ -32630,7 +32630,7 @@
                 "role": "battery",
                 "size_fixed": false,
                 "unit": {
-                  "kind": "folder",
+                  "kind": "own-folder",
                   "members": null,
                   "archive_folder": "52464e45"
                 }
