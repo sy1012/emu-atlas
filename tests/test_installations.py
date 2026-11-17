@@ -8970,6 +8970,9 @@ class _CountingMachine:
     def read_ps3_file(self, path):
         return self._inner.read_ps3_file(path)
 
+    def read_dolphin_disc(self, path):
+        return self._inner.read_dolphin_disc(path)
+
     def read_disc_identity(self, path, *, extracted=None):
         return self._inner.read_disc_identity(path, extracted=extracted)
 

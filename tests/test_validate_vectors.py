@@ -96,6 +96,7 @@ def _group(**overrides) -> Vector:
         "files": ["a.srm"],
         "granularity": "per-game-file",
         "role": "battery",
+        "unit": None,
         **overrides,
     }
 
@@ -708,6 +709,34 @@ INPUT_PS3_FILE_CASES = [
          "iso blocks must be null or one of", id="ps3-file-iso-blocks"),
 ]
 
+A_DOLPHIN_DISC = "/roms/gc/Game.rvz"
+A_DOLPHIN_DISCS = {A_DOLPHIN_DISC: A_BLOB}
+A_DOLPHIN_FACTS = {"container": "rvz", "platform": "gc", "game_id": "GALE01", "revision": 0, "region_code": None,
+                   "title_id": None}
+
+# What Dolphin reads of a disc image: every fact stated, in its own shape, or "not-a-disc".
+INPUT_DOLPHIN_DISC_CASES = [
+    case(_with(_vector(), dolphin_discs=[]), "input.dolphin_discs must be an object", id="dolphin-discs-not-object"),
+    case(_with(_vector(), dolphin_discs={A_DOLPHIN_DISC: "not-a-disc"}), "must name a declared file",
+         id="dolphin-disc-on-undeclared-file"),
+    case(_with(_vector(), files={A_DOLPHIN_DISC: {"status": "unreadable"}}, dolphin_discs={A_DOLPHIN_DISC: "not-a-disc"}),
+         "sits on an unreadable file", id="dolphin-disc-on-unreadable-file"),
+    case(_with(_vector(), files=A_DOLPHIN_DISCS, dolphin_discs={A_DOLPHIN_DISC: "unreadable"}),
+         "must be 'not-a-disc' or an object", id="dolphin-disc-state-outside-the-vocabulary"),
+    case(_with(_vector(), files=A_DOLPHIN_DISCS, dolphin_discs={A_DOLPHIN_DISC: {**A_DOLPHIN_FACTS, "container": "nfs"}}),
+         "container must be one of", id="dolphin-disc-container"),
+    case(_with(_vector(), files=A_DOLPHIN_DISCS, dolphin_discs={A_DOLPHIN_DISC: {**A_DOLPHIN_FACTS, "game_id": "GALE"}}),
+         "game_id must be six", id="dolphin-disc-game-id"),
+    case(_with(_vector(), files=A_DOLPHIN_DISCS, dolphin_discs={A_DOLPHIN_DISC: {**A_DOLPHIN_FACTS, "revision": 256}}),
+         "revision must be the byte", id="dolphin-disc-revision"),
+    case(_with(_vector(), files=A_DOLPHIN_DISCS,
+               dolphin_discs={A_DOLPHIN_DISC: {**A_DOLPHIN_FACTS, "title_id": "0001000047414c45"}}),
+         "title_id must be null or a Wii disc's", id="dolphin-disc-title-on-gamecube"),
+    case(_with(_vector(), files=A_DOLPHIN_DISCS,
+               dolphin_discs={A_DOLPHIN_DISC: {**A_DOLPHIN_FACTS, "platform": "wii", "region_code": 1}}),
+         "region_code must be null or a GameCube disc's", id="dolphin-disc-region-on-wii"),
+]
+
 A_DISC = "/roms/psx/Game.cue"
 A_CHD = "/roms/psx/Game.chd"
 A_DISC_IDENTITY = {"license": "Licensed  by", "system_cnf": "BOOT = cdrom:\\SLUS_000.01;1", "boot_found": True,
@@ -1092,6 +1121,22 @@ PLACEMENT_CASES = [
     case(_base_placement(file_set=_file_set(state="observed", files=["a.srm"],
                                             groups=[_group(role="unaudited", size_fixed=None)])),
          "file group role must be one of", id="file-group-role"),
+    case(_base_placement(file_set=_file_set(state="declared", files=["a.srm"],
+                                            groups=[_group(size_fixed=None, unit={"kind": "disc", "members": None,
+                                                                                  "archive_folder": None})])),
+         "file group unit kind must be one of", id="file-group-unit-kind"),
+    case(_base_placement(file_set=_file_set(state="declared", files=["a.srm"],
+                                            groups=[_group(size_fixed=None, unit={"kind": "folder", "members": [],
+                                                                                  "archive_folder": None})])),
+         "states members exactly when its kind is members", id="file-group-unit-folder-with-members"),
+    case(_base_placement(file_set=_file_set(state="declared", files=["a.srm"],
+                                            groups=[_group(size_fixed=None, unit={"kind": "members",
+                                                                                  "members": ["../a.gci"],
+                                                                                  "archive_folder": None})])),
+         "unit members must be distinct entry names", id="file-group-unit-member-path"),
+    case(_base_placement(file_set=_file_set(state="declared", files=["a.srm"],
+                                            groups=[_group(size_fixed=None, unit={"kind": "folder"})])),
+         "file_set.groups[].unit must be exactly the fields", id="file-group-unit-shape"),
     case(_base_placement(redirects={}),
          "savefile_location.redirects must be null or a list", id="redirects-not-a-list"),
     case(_base_placement(redirects=[{**_redirect(), "citation": "prose"}]),
@@ -1981,6 +2026,7 @@ ALL_CASES = [
     *INPUT_PATH_CASES,
     *INPUT_PS2_BIOS_HEADER_CASES,
     *INPUT_PS3_FILE_CASES,
+    *INPUT_DOLPHIN_DISC_CASES,
     *INPUT_DISC_IDENTITY_CASES,
     *INPUT_ARCHIVE_TEXT_CASES,
     *INPUT_APPIMAGE_STAMP_CASES,

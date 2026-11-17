@@ -1156,9 +1156,11 @@ placement.file_set   # declared: ('<save_id>.A1.bin', '<save_id>.B1.bin', '<save
 ```
 
 So check `needs` before joining names onto `dir`, exactly as you already do before using `dir` itself. A template is the
-whole answer atlas can give: identifying content is not locating a save, so atlas never opens a ROM to read an id out of
-it. A `save_id` hole need not stand in any name at all: Dolphin's GCI folder holds one that picks the files whose header
-carries the id, and a `file-membership-by-header` caveat says how to fill it (the Dolphin section below).
+whole answer atlas can give: identifying content is not locating a save, so atlas opens no ROM to read an id out of it —
+save where the emulator itself keys its saves by what the disc says and reads it to choose them, which atlas then reads
+the same way (Dolphin's GameCube and Wii discs, the Dolphin section below). A `save_id` hole need not stand in any name
+at all: Dolphin's GCI folder holds one that picks the files whose header carries the id, and a
+`file-membership-by-header` caveat says how to fill it (the Dolphin section below).
 
 Before filling, check the value against the spelling the answer states beside the fill:
 
@@ -1181,14 +1183,14 @@ scan and serves what it read on every ROM whose scan read an id: `title_id`, `sa
 `save_target_layout` (its `usage`) — a second way to the `save_id` without opening the ROM, though not to sigil's
 `raw_serial`, which the Cemu hole needs (§5). sigil also resolves which files under a save root belong to a game; atlas
 answers that question itself (§3 there says why), so a client takes only the id from sigil. The one place atlas states
-the rule rather than the files is Dolphin's GCI folder, where a file is a game's by bytes inside it: atlas reads no save
-file's content, so it names the folder, the bytes and the value to compare, and the caller reads the files (the Dolphin
-section below). atlas's answer is not a claim about every file a core writes past the frontend. Of the cores sigil's
-table covers, three are where the two part on this: for Handy, SAME CDi and Nestopia on FDS, sigil's rows name files
-they attribute to the core itself, while atlas names only what the frontend writes — nothing for Handy and SAME CDi,
-`<stem>.srm` for Nestopia — and whether the core writes more is open (§2 there). Where no supplier knows the id, an
-unfilled template still tells you the shape, the count and the directory — enough to recognize the files once they
-exist.
+the rule rather than the files is Dolphin's GCI folder, where a file is a game's by bytes inside it: without a disc to
+read it names the folder, the bytes and the value to compare, and the caller reads the files; with one it compares those
+four bytes itself and names the files (the Dolphin section below). atlas's answer is not a claim about every file a core
+writes past the frontend. Of the cores sigil's table covers, three are where the two part on this: for Handy, SAME CDi
+and Nestopia on FDS, sigil's rows name files they attribute to the core itself, while atlas names only what the frontend
+writes — nothing for Handy and SAME CDi, `<stem>.srm` for Nestopia — and whether the core writes more is open (§2
+there). Where no supplier knows the id, an unfilled template still tells you the shape, the count and the directory —
+enough to recognize the files once they exist.
 
 **When there is no id, the names change — and atlas says so.** The emulator uses the id only if the content carries one:
 Flycast reads it from a Dreamcast disc header, and arcade content (or a disc that states none) is named after the ROM
@@ -1275,7 +1277,7 @@ answer names the folder with `file-names-unestablished` and no file names.
 | `filenames-content-conditional`            | the file set depends on the content: `data` carries the id-less spelling and the scope token, below                                                              |
 | `file-set-spans-roots`                     | part of the save stays under `data["dir"]` (`data["files"]`) — also in `groups` when declared                                                                    |
 | `file-names-unestablished`                 | save data lives in `data["dir"]` and its names follow from nothing atlas reads — back it up whole                                                                |
-| `file-membership-by-header`                | a file of `data["dir"]` is the game's when its bytes at `offset`, `length` long, equal the `save_id` fill — Dolphin's GCI folder, below                          |
+| `file-membership-by-header`                | a file of `data["dir"]` is the game's when its bytes at `offset`, `length` long, equal the `save_id` fill or `game_code` — Dolphin's GCI folder, below           |
 | `redirect-outranked`                       | this machine's configuration outranks a stated redirect route, or makes it not apply (`data["argument"]`, `data["key"]`) — below                                 |
 | `save-id-candidates`                       | the title directories the NAND holds, each spelled as the `save_id` it fills (`data["titles"]`) — below                                                          |
 | `file-set-claims-merged`                   | two parts of the answer named one file and disagreed; it is one group, `data` lists what each said                                                               |
@@ -1682,6 +1684,28 @@ and their own card family (`standalone_savestates.json`, #225): the same entry a
 and an emulator without a savestate card keeps the `standalone-unsupported` refusal there even where its save answers
 (since #284 every save-carded emulator carries a savestate card too — for Cemu and Vita3K it is the stated no — so today
 that refusal marks the rows neither family has examined).
+
+**Name the disc, and Dolphin's answers name the game's own save.** Ask with `content_path=` naming a GameCube or Wii
+disc image and atlas reads it the way Dolphin does (`atlas/dolphin_disc.py`, through the container — plain ISO, GCM or
+NKit, CISO, GCZ, WBFS, WIA, RVZ). For a Wii disc whose ticket the image exposes (every container but WIA and RVZ) the
+ticket's title id names the title; for a WIA or RVZ image the game code names the low word, and the high word is taken
+from the NAND where its `title` tree holds exactly one directory of that low word — the one Dolphin created when it
+booted the disc. Where it holds none (a device that never ran the game, which is when a sync downloads the save) or more
+than one, the high word is `00010000`, the category of disc titles, and the source sentence says it is the disc-title
+default, derived rather than read — wrong only for a disc that installs a channel (`00010004`), which a NAND that has
+booted it names instead. A NAND that cannot be listed establishes neither, and the hole stays. The answer is that
+title's own folder, `<NAND root>/title/<hi>/<lo>` (the folder `data` lies in, beside `content`, where Dolphin keeps the
+disc's TMD), with nothing in `needs`. For a GameCube disc in a GCI-folder slot, the disc's region — its region code at
+0x458, or, where a WIA or RVZ image hides that, the region its country code maps to, which the source sentence marks as
+derived — picks the one folder, and the `.gci` files directly in it whose first four bytes are the disc's game code are
+listed; `needs` is empty, and `file-membership-by-header` carries `game_code` instead of the `save_id` fill. A raw card
+stays the shared card it is. In both answers the group carries `unit`, the explicit statement a sync client acts on:
+`unit.kind == "folder"` says the group's directory is the game's save whole, and `unit.archive_folder` (the Wii low
+word) is the folder an archive keeps its entries under — `<lo>/data/…`; `unit.kind == "members"` says the files
+`unit.members` names in the shared directory are the game's save — possibly none, on a fresh card — and `archive_folder`
+is `None`, the archive flat. `unit` is `None` on every other group, whatever its granularity says: RPCS3's
+`per-game-directory` answer names the parent of every title's folder. A disc that does not read, one of the other
+platform, or a GameCube region nothing read establishes, leaves the answer and its holes as they are without one.
 
 **A GameCube card atlas cannot reach is not an empty slot.** A slot whose card path only the emulator's sandbox can
 spell still holds the card the emulator writes to — whether those writes are kept cannot be told from here — and the

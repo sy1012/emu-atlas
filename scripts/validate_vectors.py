@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from collections.abc import Callable
 from typing import Any, NamedTuple, NoReturn
@@ -42,6 +43,7 @@ INPUT_FIELDS_OPTIONAL = {
     "appimage_stamps",
     "ps2_bios_headers",
     "ps3_files",
+    "dolphin_discs",
     "disc_identities",
     "archives",
     "archive_texts",
@@ -277,7 +279,11 @@ PATCH_CONTINUATIONS = 9
 # that the tree is undivided.
 KNOWN_KEYINGS = {"game-id", "serial", "title-id", "rom-name", "pack", "title"}
 FILE_SET_FIELDS = {"state", "files", "complete", "groups"}
-FILE_GROUP_FIELDS = {"dir", "files", "granularity", "role", "size_fixed"}
+FILE_GROUP_FIELDS = {"dir", "files", "granularity", "role", "size_fixed", "unit"}
+# The statement that a group's folder, or named files in it, are one game's own
+# save (atlas.placement.SaveUnitStatement): its fields and its two kinds.
+SAVE_UNIT_FIELDS = {"kind", "members", "archive_folder"}
+KNOWN_SAVE_UNIT_KINDS = {"folder", "members"}
 # The byte a fixed-size save may be padded with at its end
 # (size-fixed-except-trailing-fill's data["fill"]).
 KNOWN_SIZE_FILLS = {"0xff", "0x00"}
@@ -1347,6 +1353,7 @@ def _validate_input(name: str, inp: Any) -> None:
     _validate_input_appimage_stamps(name, inp.get("appimage_stamps", {}), inp.get("appimages", {}))
     _validate_input_ps2_bios_headers(name, inp.get("ps2_bios_headers", {}), inp["files"])
     _validate_input_ps3_files(name, inp.get("ps3_files", {}), inp["files"])
+    _validate_input_dolphin_discs(name, inp.get("dolphin_discs", {}), inp["files"])
     _validate_input_archives(name, inp.get("archives", {}), inp["files"])
     _validate_input_disc_identities(name, inp.get("disc_identities", {}), inp["files"], inp.get("archives", {}))
     _validate_input_archive_texts(name, inp.get("archive_texts", {}), inp.get("archives", {}))
@@ -1505,6 +1512,56 @@ PS3_PSF_CATEGORIES = {
     "GD", "DG", "HG", "AM", "AP", "AS", "AT", "AV", "BV", "WT", "HM",
     "CB", "SF", "2P", "2G", "1P", "PP", "MN", "PE", "2D", "SD", "MS",
 }  # fmt: skip
+
+
+# The Dolphin disc modeling vocabulary — mirrored from FixtureMachine
+# (atlas/machine.py) and atlas/dolphin_disc.py: the containers the reader
+# opens, the two platforms, and the one state a declared image may answer short
+# of its facts. A declared image with no entry answers "unreadable".
+DOLPHIN_DISC_FIELDS = {"container", "platform", "game_id", "revision", "region_code", "title_id"}
+DOLPHIN_DISC_CONTAINERS = {"plain", "ciso", "gcz", "wbfs", "wia", "rvz"}
+DOLPHIN_DISC_PLATFORMS = {"gc", "wii"}
+DOLPHIN_DISC_STATES = {"not-a-disc"}
+
+
+def _validate_input_dolphin_discs(name: str, declared: Any, files: Any) -> None:
+    if not isinstance(declared, dict):
+        fail(f"{name}: input.dolphin_discs must be an object")
+    for path, spec in declared.items():
+        if not isinstance(path, str) or path not in files:
+            fail(f"{name}: dolphin disc {path!r} must name a declared file")
+        file_spec = files[path]
+        if isinstance(file_spec, dict) and file_spec.get("status") == "unreadable":
+            fail(f"{name}: dolphin disc {path!r} sits on an unreadable file, whose bytes state nothing")
+        if isinstance(spec, str) and spec in DOLPHIN_DISC_STATES:
+            continue
+        _validate_dolphin_disc_spec(name, path, spec)
+
+
+def _is_number(value: Any, bits: int) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value < 1 << bits
+
+
+def _validate_dolphin_disc_spec(name: str, path: str, spec: Any) -> None:
+    if not isinstance(spec, dict) or set(spec) != DOLPHIN_DISC_FIELDS:
+        fail(f"{name}: dolphin disc {path!r} must be 'not-a-disc' or an object with exactly {sorted(DOLPHIN_DISC_FIELDS)}")
+    if spec["container"] not in DOLPHIN_DISC_CONTAINERS or spec["platform"] not in DOLPHIN_DISC_PLATFORMS:
+        fail(
+            f"{name}: dolphin disc {path!r} container must be one of {sorted(DOLPHIN_DISC_CONTAINERS)} and "
+            f"platform one of {sorted(DOLPHIN_DISC_PLATFORMS)}"
+        )
+    game_id = spec["game_id"]
+    if not isinstance(game_id, str) or len(game_id) != 6 or any(ord(char) > 0xFF for char in game_id):
+        fail(f"{name}: dolphin disc {path!r} game_id must be six one-byte characters (latin-1)")
+    if not _is_number(spec["revision"], 8):
+        fail(f"{name}: dolphin disc {path!r} revision must be the byte the header holds")
+    region, title = spec["region_code"], spec["title_id"]
+    if region is not None and (spec["platform"] != "gc" or not _is_number(region, 32)):
+        fail(f"{name}: dolphin disc {path!r} region_code must be null or a GameCube disc's u32")
+    if title is not None and (
+        spec["platform"] != "wii" or not isinstance(title, str) or re.fullmatch("[0-9a-f]{16}", title) is None
+    ):
+        fail(f"{name}: dolphin disc {path!r} title_id must be null or a Wii disc's sixteen lowercase hex digits")
 
 
 def _validate_input_ps3_files(name: str, declared: Any, files: Any) -> None:
@@ -2035,6 +2092,30 @@ def _validate_one_file_group(name: str, group: Any) -> None:
     if group["size_fixed"] is not None and not isinstance(group["size_fixed"], bool):
         # null is "not established", never a third spelling of false.
         fail(f"{name}: file group size_fixed must be true, false or null")
+    if group["unit"] is not None:
+        _validate_save_unit(name, group["unit"])
+
+
+def _is_entry_name(value: Any) -> bool:
+    return isinstance(value, str) and value not in ("", ".", "..") and "/" not in value and "\0" not in value
+
+
+def _validate_save_unit(name: str, unit: Any) -> None:
+    """A group's save-unit statement: a kind, the members exactly where it names them, and entry names."""
+    _require_exact(name, unit, SAVE_UNIT_FIELDS, "file_set.groups[].unit")
+    if unit["kind"] not in KNOWN_SAVE_UNIT_KINDS:
+        fail(f"{name}: file group unit kind must be one of {sorted(KNOWN_SAVE_UNIT_KINDS)}")
+    members = unit["members"]
+    if (members is None) != (unit["kind"] == "folder"):
+        fail(f"{name}: a file group unit states members exactly when its kind is members")
+    if members is not None and (
+        not isinstance(members, list)
+        or not all(_is_entry_name(member) for member in members)
+        or len(set(members)) != len(members)
+    ):
+        fail(f"{name}: file group unit members must be distinct entry names")
+    if unit["archive_folder"] is not None and not _is_entry_name(unit["archive_folder"]):
+        fail(f"{name}: file group unit archive_folder must be null or an entry name")
 
 
 def _validate_file_groups(name: str, file_set: Any) -> None:
