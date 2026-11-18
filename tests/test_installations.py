@@ -8985,6 +8985,9 @@ class _CountingMachine:
     def read_psp_param_sfo(self, path):
         return self._inner.read_psp_param_sfo(path)
 
+    def read_n3ds_rom(self, path):
+        return self._inner.read_n3ds_rom(path)
+
     def read_disc_identity(self, path, *, extracted=None):
         return self._inner.read_disc_identity(path, extracted=extracted)
 

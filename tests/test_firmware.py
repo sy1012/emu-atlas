@@ -159,6 +159,7 @@ from atlas.machine import (
     Ps2BiosHeaderResult,
     DolphinDiscResult,
     EdenProfilesResult,
+    N3dsRomResult,
     PspDiscResult,
     PspParamSfoResult,
     SwitchPackageResult,
@@ -6148,6 +6149,10 @@ class _CountingMachine:
     def read_psp_param_sfo(self, path: str) -> PspParamSfoResult:
         self._count("read_psp_param_sfo")
         return self._inner.read_psp_param_sfo(path)
+
+    def read_n3ds_rom(self, path: str) -> N3dsRomResult:
+        self._count("read_n3ds_rom")
+        return self._inner.read_n3ds_rom(path)
 
     def read_disc_identity(self, path: str, *, extracted: ExtractedEntry | None = None) -> DiscIdentityResult:
         self._count("read_disc_identity")

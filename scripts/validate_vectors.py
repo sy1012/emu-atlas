@@ -48,6 +48,7 @@ INPUT_FIELDS_OPTIONAL = {
     "eden_profiles",
     "psp_discs",
     "psp_param_sfos",
+    "n3ds_roms",
     "disc_identities",
     "archives",
     "archive_texts",
@@ -290,9 +291,9 @@ KNOWN_KEYINGS = {"game-id", "serial", "title-id", "rom-name", "pack", "title"}
 FILE_SET_FIELDS = {"state", "files", "complete", "groups"}
 FILE_GROUP_FIELDS = {"dir", "files", "granularity", "role", "size_fixed", "unit"}
 # The statement that a group's folder, or named files in it, are one game's own
-# save (atlas.placement.SaveUnitStatement): its fields and its three kinds.
-SAVE_UNIT_FIELDS = {"kind", "members", "archive_folder", "prefix"}
-KNOWN_SAVE_UNIT_KINDS = {"own-folder", "own-files", "own-folders-by-prefix"}
+# save (atlas.placement.SaveUnitStatement): its fields and its four kinds.
+SAVE_UNIT_FIELDS = {"kind", "members", "archive_folder", "prefix", "archive_roots"}
+KNOWN_SAVE_UNIT_KINDS = {"own-folder", "own-files", "own-folders-by-prefix", "own-folders-by-archive-root"}
 # The byte a fixed-size save may be padded with at its end
 # (size-fixed-except-trailing-fill's data["fill"]).
 KNOWN_SIZE_FILLS = {"0xff", "0x00"}
@@ -1396,6 +1397,7 @@ def _validate_input(name: str, inp: Any) -> None:
     _validate_input_eden_profiles(name, inp.get("eden_profiles", {}), inp["files"])
     _validate_input_psp_discs(name, inp.get("psp_discs", {}), inp["files"])
     _validate_input_psp_param_sfos(name, inp.get("psp_param_sfos", {}), inp["files"])
+    _validate_input_n3ds_roms(name, inp.get("n3ds_roms", {}), inp["files"])
     _validate_input_archives(name, inp.get("archives", {}), inp["files"])
     _validate_input_disc_identities(name, inp.get("disc_identities", {}), inp["files"], inp.get("archives", {}))
     _validate_input_archive_texts(name, inp.get("archive_texts", {}), inp.get("archives", {}))
@@ -1671,6 +1673,53 @@ def _validate_input_psp_param_sfos(name: str, declared: Any, files: Any) -> None
             or len(set(spec)) != len(spec)
         ):
             fail(f"{name}: psp param.sfo {path!r} must be 'not-an-sfo' or a list of distinct non-empty keys")
+
+
+# n3ds_roms: the path of a 3DS image `files` declares -> what Azahar reads of it,
+# {"container": "ncsd"|"ncch", "program_id": <16 hex>, "extdata_id": <16 hex>|null,
+# "extdata_basis": "exheader-id"|"extended-access-first"|null}, or
+# "format-not-read" / "encrypted" / "not-a-rom".
+N3DS_ROM_STATES = {"format-not-read", "encrypted", "not-a-rom"}
+N3DS_ROM_FIELDS = {"container", "program_id", "extdata_id", "extdata_basis"}
+N3DS_EXTDATA_BASES = {"exheader-id", "extended-access-first"}
+_HEX16 = re.compile(r"[0-9a-f]{16}")
+
+
+def _validate_input_n3ds_roms(name: str, declared: Any, files: Any) -> None:
+    if not isinstance(declared, dict):
+        fail(f"{name}: input.n3ds_roms must be an object")
+    for path, spec in declared.items():
+        _declared_readable(name, "n3ds rom", path, files)
+        if isinstance(spec, str) and spec in N3DS_ROM_STATES:
+            continue
+        if (
+            not isinstance(spec, dict)
+            or set(spec) != N3DS_ROM_FIELDS
+            or spec["container"] not in ("ncsd", "ncch")
+            or not isinstance(spec["program_id"], str)
+            or not _HEX16.fullmatch(spec["program_id"])
+        ):
+            fail(
+                f"{name}: n3ds rom {path!r} must be one of {sorted(N3DS_ROM_STATES)} or "
+                '{"container": "ncsd"|"ncch", "program_id": <16 lowercase hex>, "extdata_id", "extdata_basis"}'
+            )
+        _validate_n3ds_extdata(name, path, spec)
+
+
+def _validate_n3ds_extdata(name: str, path: str, spec: Any) -> None:
+    extdata, basis = spec["extdata_id"], spec["extdata_basis"]
+    if extdata is None and basis is None:
+        return
+    if (
+        not isinstance(extdata, str)
+        or not _HEX16.fullmatch(extdata)
+        or int(extdata, 16) == 0
+        or basis not in N3DS_EXTDATA_BASES
+    ):
+        fail(
+            f"{name}: n3ds rom {path!r} states extdata_id (16 lowercase hex, not zero) and extdata_basis "
+            f"({sorted(N3DS_EXTDATA_BASES)}) together, or both null"
+        )
 
 
 def _is_number(value: Any, bits: int) -> bool:
@@ -2229,6 +2278,14 @@ def _validate_one_file_group(name: str, group: Any) -> None:
         fail(f"{name}: file group size_fixed must be true, false or null")
     if group["unit"] is not None:
         _validate_save_unit(name, group["unit"])
+        _validate_unit_holds_its_group(name, group)
+
+
+def _validate_unit_holds_its_group(name: str, group: Any) -> None:
+    """An ``own-folders-by-archive-root`` unit names its own group's directory among its roots."""
+    roots = group["unit"]["archive_roots"]
+    if roots is not None and group["dir"] not in roots.values():
+        fail(f"{name}: an own-folders-by-archive-root unit's group directory is one of its archive roots")
 
 
 def _is_entry_name(value: Any) -> bool:
@@ -2241,7 +2298,7 @@ def _validate_save_unit(name: str, unit: Any) -> None:
     if unit["kind"] not in KNOWN_SAVE_UNIT_KINDS:
         fail(f"{name}: file group unit kind must be one of {sorted(KNOWN_SAVE_UNIT_KINDS)}")
     members = unit["members"]
-    if (members is None) != (unit["kind"] == "own-folder"):
+    if (members is None) != (unit["kind"] in ("own-folder", "own-folders-by-archive-root")):
         fail(f"{name}: a file group unit states members exactly when its kind is members")
     if members is not None and (
         not isinstance(members, list)
@@ -2252,6 +2309,27 @@ def _validate_save_unit(name: str, unit: Any) -> None:
     if unit["archive_folder"] is not None and not _is_entry_name(unit["archive_folder"]):
         fail(f"{name}: file group unit archive_folder must be null or an entry name")
     _validate_save_unit_prefix(name, unit)
+    _validate_save_unit_archive_roots(name, unit)
+
+
+def _validate_save_unit_archive_roots(name: str, unit: Any) -> None:
+    """``own-folders-by-archive-root`` maps one or more root names to absolute directories, and packs at the top."""
+    roots = unit["archive_roots"]
+    if (roots is None) != (unit["kind"] != "own-folders-by-archive-root"):
+        fail(f"{name}: a file group unit states archive_roots exactly when its kind is own-folders-by-archive-root")
+    if roots is None:
+        return
+    if not isinstance(roots, dict) or not roots:
+        fail(f"{name}: file group unit archive_roots must be a non-empty object")
+    if list(roots) != sorted(roots):
+        fail(f"{name}: file group unit archive_roots are in root-name order")
+    for root, directory in roots.items():
+        if not _is_entry_name(root):
+            fail(f"{name}: file group unit archive root {root!r} must be an entry name")
+        if not isinstance(directory, str) or not directory.startswith("/"):
+            fail(f"{name}: file group unit archive root {root!r} must name an absolute directory")
+    if unit["archive_folder"] is not None:
+        fail(f"{name}: an own-folders-by-archive-root unit packs at the archive's top level (archive_folder null)")
 
 
 def _validate_save_unit_prefix(name: str, unit: Any) -> None:

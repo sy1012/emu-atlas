@@ -1812,6 +1812,26 @@ the game's choice, not the emulator's: a PlayStation Network release (an `NP…`
 instead (`NPJH50804` saves as `ULJS00445`), and `psn-save-prefix-may-differ` says so beside such a unit; atlas keeps no
 table that re-keys it.
 
+**Name the 3DS image, and Azahar's answer names the title's two directories.** Azahar keeps a title's save on the
+emulated SD at `Nintendo 3DS/<ID0>/<ID1>/title/<high>/<low>/data` — the save archive's files in `00000001/` and its
+format record `00000001.metadata` beside them — and the title's extra data at `extdata/<HIGH>/<LOW>` beside the title
+tree, uppercase hex there, the words those of the extdata id the game opens. Ask with `content_path=` naming a card
+image (`.3ds`, `.cci`) or an NCCH (`.cxi`) and atlas reads the program id from the program's NCCH header — the id Azahar
+runs the title under — and the extdata id its extended header grants, the way Azahar's own `ReadExtdataId` reads it
+(`atlas/n3ds_rom.py`). The first group's `dir` is then the title's `data` directory, `needs` is empty, and its
+`unit.kind == "own-folders-by-archive-root"`: `unit.archive_roots` maps `data` to that directory and, where the image
+grants an extdata id, `extdata` to the extdata directory, which a second group states (`per-game-directory`). The roots
+are the archive's: an upload packs each directory that exists as `data/…` and `extdata/…`; a restore replaces each
+directory whose root the archive carries, leaves the other alone, never removes one the archive does not carry, and an
+archive with any other top-level entry is not this unit's — the shape Argosy's `N3dsFolderHandler` uses, so the two read
+each other's archives. Either directory may be absent, for a title that never saved or keeps its progress in one alone;
+the unit is stated all the same, so a restore has somewhere to place them. The extdata id is the one the title is
+granted, not one the game was seen to open: a game names the extdata it opens in its own request, and under extended
+savedata access the header lists several and atlas, like Azahar, takes the first. A CIA, a compressed Z3DS image,
+Azahar's console-encrypted file, an encrypted NCCH (one Azahar does not load) or bytes with no 3DS header leave the
+answer without a title: `title/<save_id>/data/00000001` with the `save_id` hole spelled `title-id-words`, and the
+extdata tree stated whole with its entries refused.
+
 **A GameCube card atlas cannot reach is not an empty slot.** A slot whose card path only the emulator's sandbox can
 spell still holds the card the emulator writes to — whether those writes are kept cannot be told from here — and the
 answer says so: no group for that card, because atlas has no directory to state one in, `sandbox-path-untranslated`
