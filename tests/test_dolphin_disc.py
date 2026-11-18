@@ -515,23 +515,38 @@ class TestOnlyTheReadingsThatEstablishItStateIt:
     def test_no_vector_outside_the_reading_systems_states_a_unit(self):
         # GameCube and Wii by Dolphin's disc reads; Switch by Eden's, which
         # names the application and the active user; PSP by PPSSPP's, which
-        # names the game's id; 3DS by Azahar's, which names the title.
+        # names the game's id; 3DS by Azahar's, which names the title; PS3 by
+        # RPCS3's, which names the title id where one user account is listed.
         stated = [
             system
             for system, answer in self._answers()
             for group in (answer.get("file_set") or {}).get("groups", [])
             if group["unit"] is not None
         ]
-        assert stated and set(stated) <= {"gc", "wii", "switch", "psp", "n3ds"}
+        assert stated and set(stated) <= {"gc", "wii", "switch", "psp", "n3ds", "ps3"}
 
-    @pytest.mark.parametrize("system", ["ps3", "wiiu"])
-    def test_rpcs3_and_cemu_answer_per_game_directories_with_no_unit(self, system):
+    def test_cemu_answers_per_game_directories_with_no_unit(self):
         groups = [
             group
             for asked, answer in self._answers()
-            if asked == system
+            if asked == "wiiu"
             for group in (answer.get("file_set") or {}).get("groups", [])
             if group["granularity"] == atlas.GRANULARITY_PER_GAME_DIRECTORY
         ]
         assert groups
         assert all(group["unit"] is None for group in groups)
+
+    def test_rpcs3_states_a_unit_only_as_the_games_prefixed_folders(self):
+        # The per-game-directory group is the parent of every title's folders:
+        # a unit there is only ever the folders a title id begins, never the
+        # directory whole.
+        groups = [
+            group
+            for asked, answer in self._answers()
+            if asked == "ps3"
+            for group in (answer.get("file_set") or {}).get("groups", [])
+            if group["granularity"] == atlas.GRANULARITY_PER_GAME_DIRECTORY
+        ]
+        assert any(group["unit"] is None for group in groups)
+        units = [group["unit"] for group in groups if group["unit"] is not None]
+        assert units and all(unit["kind"] == atlas.SAVE_UNIT_PREFIXED_FOLDERS for unit in units)

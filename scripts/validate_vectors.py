@@ -49,6 +49,7 @@ INPUT_FIELDS_OPTIONAL = {
     "psp_discs",
     "psp_param_sfos",
     "n3ds_roms",
+    "ps3_titles",
     "disc_identities",
     "archives",
     "archive_texts",
@@ -565,7 +566,7 @@ KNOWN_STATE_ROOT_KINDS = {
 KNOWN_HOLES = {"content_dir", "content_dir_name", "cwd", "library_name", "profile_id", "region", "rom_stem", "save_id"}
 # How a ``save_id`` fill is spelled — the value of a caveat's
 # ``save_id_spelling``, which rides beside its ``save_id`` fill sentence.
-KNOWN_SAVE_ID_SPELLINGS = {"title-id-words", "path-segment", "game-code", "psp-game-id"}
+KNOWN_SAVE_ID_SPELLINGS = {"title-id-words", "path-segment", "game-code", "psp-game-id", "ps3-title-id"}
 KNOWN_GRANULARITIES = {
     "shared-card",
     "shared-file",
@@ -744,6 +745,7 @@ KNOWN_CAVEAT_CODES = {
     "save-id-candidates",
     "active-profile-unestablished",
     "psn-save-prefix-may-differ",
+    "ps3-save-prefix-may-differ",
     "appimage-ambiguous",
     "extra-content-folders-unstated",
     "extra-content-scanned-beside-launch",
@@ -1398,6 +1400,7 @@ def _validate_input(name: str, inp: Any) -> None:
     _validate_input_psp_discs(name, inp.get("psp_discs", {}), inp["files"])
     _validate_input_psp_param_sfos(name, inp.get("psp_param_sfos", {}), inp["files"])
     _validate_input_n3ds_roms(name, inp.get("n3ds_roms", {}), inp["files"])
+    _validate_input_ps3_titles(name, inp.get("ps3_titles", {}), inp["files"])
     _validate_input_archives(name, inp.get("archives", {}), inp["files"])
     _validate_input_disc_identities(name, inp.get("disc_identities", {}), inp["files"], inp.get("archives", {}))
     _validate_input_archive_texts(name, inp.get("archive_texts", {}), inp.get("archives", {}))
@@ -1704,6 +1707,34 @@ def _validate_input_n3ds_roms(name: str, declared: Any, files: Any) -> None:
                 '{"container": "ncsd"|"ncch", "program_id": <16 lowercase hex>, "extdata_id", "extdata_basis"}'
             )
         _validate_n3ds_extdata(name, path, spec)
+
+
+# ps3_titles: the path of a PS3 game file `files` declares -> the title id it
+# states, {"source": "param-sfo"|"pkg"|"iso", "title_id": <as stated>}, or
+# "format-not-read" / "executable" / "no-title-id".
+PS3_TITLE_STATES = {"format-not-read", "executable", "no-title-id"}
+PS3_TITLE_SOURCES = {"param-sfo", "pkg", "iso"}
+
+
+def _validate_input_ps3_titles(name: str, declared: Any, files: Any) -> None:
+    if not isinstance(declared, dict):
+        fail(f"{name}: input.ps3_titles must be an object")
+    for path, spec in declared.items():
+        _declared_readable(name, "ps3 title", path, files)
+        if isinstance(spec, str) and spec in PS3_TITLE_STATES:
+            continue
+        if (
+            not isinstance(spec, dict)
+            or set(spec) != {"source", "title_id"}
+            or spec["source"] not in PS3_TITLE_SOURCES
+            or not isinstance(spec["title_id"], str)
+            or not spec["title_id"]
+            or "\0" in spec["title_id"]
+        ):
+            fail(
+                f"{name}: ps3 title {path!r} must be one of {sorted(PS3_TITLE_STATES)} or "
+                '{"source": "param-sfo"|"pkg"|"iso", "title_id": <non-empty string>}'
+            )
 
 
 def _validate_n3ds_extdata(name: str, path: str, spec: Any) -> None:

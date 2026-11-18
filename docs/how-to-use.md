@@ -1360,6 +1360,7 @@ answer names the folder with `file-names-unestablished` and no file names.
 | `file-names-unestablished`                 | save data lives in `data["dir"]` and its names follow from nothing atlas reads — back it up whole                                                                |
 | `file-membership-by-header`                | a file of `data["dir"]` is the game's when its bytes at `offset`, `length` long, equal the `save_id` fill or `game_code` — Dolphin's GCI folder, below           |
 | `psn-save-prefix-may-differ`               | the unit matches by a PlayStation Network id (`data["prefix"]`); the game may save under its disc release's id instead                                           |
+| `ps3-save-prefix-may-differ`               | a PS3 unit matches by the title id (`data["prefix"]`); the game names its own folders and may keep some under another id                                         |
 | `redirect-outranked`                       | this machine's configuration outranks a stated redirect route, or makes it not apply (`data["argument"]`, `data["key"]`) — below                                 |
 | `save-id-candidates`                       | the title directories the NAND holds, each spelled as the `save_id` it fills (`data["titles"]`) — below                                                          |
 | `file-set-claims-merged`                   | two parts of the answer named one file and disagreed; it is one group, `data` lists what each said                                                               |
@@ -1611,8 +1612,9 @@ a NUL — Flycast, SwanStation, DuckStation's per-game cards, PCSX2's texture di
 ASCII characters, each an uppercase letter or a digit — the GameCube game code Dolphin's and PrimeHack's GCI folder
 compares, where a whole six-character game id fails) or `psp-game-id` (four ASCII uppercase letters and five digits,
 such as `ULUS10064` — the PSP game id PPSSPP's savedata folders begin with, a prefix of their names rather than a whole
-name). It rides wherever `save_id` does and nowhere else, and an answer carries a `save_id` fill exactly where it
-carries the `<save_id>` hole — in `needs`, or in a path or file name a caveat states.
+name) or `ps3-title-id` (the same shape, such as `BLUS30443` — the `TITLE_ID` a PS3 game's `PARAM.SFO` states, which its
+savedata folders begin with under RPCS3). It rides wherever `save_id` does and nowhere else, and an answer carries a
+`save_id` fill exactly where it carries the `<save_id>` hole — in `needs`, or in a path or file name a caveat states.
 `atlas.checked_save_id(spelling, value)` returns the value or raises `ValueError`; a Wii disc's low word alone
 (`524d4745`) fails `title-id-words`, which is the point, and a `..` fails `path-segment`, so a checked value never leads
 a write out of the directory it fills.
@@ -1788,8 +1790,9 @@ stays the shared card it is. In both answers the group carries `unit`, the expli
 word) is the folder an archive keeps its entries under — `<lo>/data/…`; `unit.kind == "own-files"` says the files
 `unit.members` names in the shared directory are the game's save — possibly none, on a fresh card — and `archive_folder`
 is `None`, the archive flat. `unit` is `None` on every other group, whatever its granularity says: RPCS3's
-`per-game-directory` answer names the parent of every title's folder. A disc that does not read, one of the other
-platform, or a GameCube region nothing read establishes, leaves the answer and its holes as they are without one.
+`per-game-directory` answer names the parent of every title's folders, and a unit is stated there only as the folders a
+title id begins (below). A disc that does not read, one of the other platform, or a GameCube region nothing read
+establishes, leaves the answer and its holes as they are without one.
 
 **Name the disc, and PPSSPP's answer names the game's folders.** A PSP game saves in folders directly below
 `PSP/SAVEDATA` whose names begin with the name it hands the savedata utility — by the platform's convention its own id,
@@ -1831,6 +1834,29 @@ savedata access the header lists several and atlas, like Azahar, takes the first
 Azahar's console-encrypted file, an encrypted NCCH (one Azahar does not load) or bytes with no 3DS header leave the
 answer without a title: `title/<save_id>/data/00000001` with the `save_id` hole spelled `title-id-words`, and the
 extdata tree stated whole with its entries refused.
+
+**Name the PS3 game, and RPCS3's answer names its folders.** A PS3 game saves through the savedata utility in folders
+directly below `dev_hdd0/home/<user>/savedata`, named by the game itself — by convention its title id and a suffix,
+`BLUS30443GAMEDATA` beside `BLUS30443-AUTOSAVE` — so, as on the PSP, one game's save is several sibling folders in a
+directory every game shares, and the per-user group is never the game's folder whole. Ask with `content_path=` naming
+the game and atlas reads the title id RPCS3 runs it under (`atlas/ps3_title.py`): for a folder dump, or its
+`PS3_GAME/USRDIR/EBOOT.BIN`, the `TITLE_ID` of the `PARAM.SFO` RPCS3's boot loads — `PS3_GAME/PARAM.SFO` — the dump's
+boot file found the way RPCS3 searches a directory for one; for an ISO image, the `TITLE_ID` of its
+`PS3_GAME/PARAM.SFO`; for a PSN package, the title part of the content id its unencrypted header carries, the nine bytes
+RPCS3 installs it under (`UP0006-NPUB30058_00-…` names `NPUB30058`). Where exactly one user account is listed, that
+account's group then carries `unit.kind == "own-folders-by-prefix"` with `unit.prefix` the title id: the game's save is
+the directories in that savedata whose names begin with it, ASCII case aside, and `unit.members` lists the ones there
+now — possibly none. Every such folder is a save — the savedata utility writes nothing else there, and installed games
+live under `dev_hdd0/game` — so none is left out; RPCS3's own scratch copies begin with a period. An upload packs each
+member at the archive's top level and a restore removes the members and nothing else before placing the folders it
+carries, as for the PSP. With two accounts or more no unit is stated, because which one the emulator runs is recorded
+nowhere and a restore must not guess it; with none, a listing that came back short, an account left undecided or a
+savedata that cannot be listed, none either. Then, and wherever the title id was not read — no `content_path`, a PSP or
+PS Vita package, a `PARAM.SFO` RPCS3's loader keeps nothing of, an id that is not four letters and five digits — the
+answer carries `needs: ('save_id',)` and `file-names-unestablished` states the fill, spelled `ps3-title-id`. The prefix
+is the game's choice, not the emulator's: a game hands the utility any folder name and may list folders by other
+prefixes than its own, so a disc release and its PSN one, or a sequel reading its predecessor's save, may keep folders
+under another title's id. `ps3-save-prefix-may-differ` says so beside every unit; atlas keeps no table that re-keys it.
 
 **A GameCube card atlas cannot reach is not an empty slot.** A slot whose card path only the emulator's sandbox can
 spell still holds the card the emulator writes to — whether those writes are kept cannot be told from here — and the
@@ -2034,21 +2060,22 @@ stand, because both builds compose them alike, and which of them a launch opens 
 
 RPCS3 is the one whose directory takes two steps to reach. `vfs.yml` maps the emulated PS3's internal drive
 (`/dev_hdd0/`) to a host directory, composed off a `$(EmulatorDir)` variable the same file defines — empty means the
-emulator's own config directory. Below the drive, saves are one directory per title id under `home/<user>/savedata`.
-Which user the emulator runs as is a runtime selection nothing on disk records, so **every user home RPCS3 itself would
-list is a group of its own where every entry found was decided**, and a caveat lists them: a machine with two accounts
-gets two trees rather than a guess at which is in force. With an entry the survey could not decide beside them — the two
-ways that happens are below — the caveat says instead that the accounts stated are the ones established here, and names
-the undecided entries. It never says the listing could have stopped early, which is where this differs from the Vita3K
-sentence: RPCS3's walk skips an entry whose `fstatat` fails and reads on into the next, so an undecided entry costs the
-emulator's own list that entry at most. Where the tree holds no user home at all, the caveat says exactly that — the
-directory named is the one the emulator creates at startup, not one found here — and a tree that could not be listed
-carries `save-dir-unlistable` of its own, so "which users exist is unknown" is something a client can branch on. Two
-more things ride along: the per-title directories keep their names refused (they are the games' own), and a _second_
-place saves live rides as its own group — `savedata/vmc`, the virtual memory cards for PS1 and PS2 classics, outside the
-per-user tree entirely, with `files: null` because what lands there has not been read, and `file-set-spans-roots` saying
-a sync that walks only the per-user tree misses it. That card is also the first to read YAML, through a reader that
-names the keys it does not read rather than guessing (`atlas.yaml_scalars`).
+emulator's own config directory. Below the drive, saves are folders named by each game, beginning with its title id,
+under `home/<user>/savedata`. Which user the emulator runs as is a runtime selection nothing on disk records, so **every
+user home RPCS3 itself would list is a group of its own where every entry found was decided**, and a caveat lists them:
+a machine with two accounts gets two trees rather than a guess at which is in force. With an entry the survey could not
+decide beside them — the two ways that happens are below — the caveat says instead that the accounts stated are the ones
+established here, and names the undecided entries. It never says the listing could have stopped early, which is where
+this differs from the Vita3K sentence: RPCS3's walk skips an entry whose `fstatat` fails and reads on into the next, so
+an undecided entry costs the emulator's own list that entry at most. Where the tree holds no user home at all, the
+caveat says exactly that — the directory named is the one the emulator creates at startup, not one found here — and a
+tree that could not be listed carries `save-dir-unlistable` of its own, so "which users exist is unknown" is something a
+client can branch on. Two more things ride along: the folders keep their names refused unless the question names the
+game (they are the games' own, and **Name the PS3 game** above says what naming it adds), and a _second_ place saves
+live rides as its own group — `savedata/vmc`, the virtual memory cards for PS1 and PS2 classics, outside the per-user
+tree entirely, with `files: null` because what lands there has not been read, and `file-set-spans-roots` saying a sync
+that walks only the per-user tree misses it. That card is also the first to read YAML, through a reader that names the
+keys it does not read rather than guessing (`atlas.yaml_scalars`).
 
 Both per-user surveys list the user root the way the emulators iterate it, then apply each emulator's own selection
 rule. The listing is a directory walk on both sides — RPCS3's `fs::dir` is `readdir` (File.cpp:2091-2108 at build

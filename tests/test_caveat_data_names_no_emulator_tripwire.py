@@ -243,7 +243,10 @@ BLIND_SITES: dict[tuple[str, str], int] = {
     ("installations.py", "_catalogue_exclusive_caveat"): 1,
     ("installations.py", "_catalogue_sealed_caveat"): 1,
     ("installations.py", "_catalogue_unread_caveat"): 1,
-    ("installations.py", "_per_user_savedata_placement"): 1,
+    # The per-user state caveat, and file-names-unestablished splatting the
+    # shape's ``names_data`` — RPCS3's save_id fill and its spelling, built by
+    # ``_rpcs3_unit`` and naming no emulator.
+    ("installations.py", "_per_user_savedata_placement"): 2,
     ("installations.py", "_retroarch_mod_location"): 1,
     ("installations.py", "_retroarch_texture_pack_location"): 1,
     ("installations.py", "_verification_notes"): 1,

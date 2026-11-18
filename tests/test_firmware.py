@@ -160,6 +160,7 @@ from atlas.machine import (
     DolphinDiscResult,
     EdenProfilesResult,
     N3dsRomResult,
+    Ps3TitleResult,
     PspDiscResult,
     PspParamSfoResult,
     SwitchPackageResult,
@@ -6153,6 +6154,10 @@ class _CountingMachine:
     def read_n3ds_rom(self, path: str) -> N3dsRomResult:
         self._count("read_n3ds_rom")
         return self._inner.read_n3ds_rom(path)
+
+    def read_ps3_title(self, path: str) -> Ps3TitleResult:
+        self._count("read_ps3_title")
+        return self._inner.read_ps3_title(path)
 
     def read_disc_identity(self, path: str, *, extracted: ExtractedEntry | None = None) -> DiscIdentityResult:
         self._count("read_disc_identity")
