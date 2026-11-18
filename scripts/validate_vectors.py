@@ -61,6 +61,7 @@ INPUT_FIELDS_OPTIONAL = {
     "launchable_query",
     "launch_command_query",
     "extra_content_query",
+    "package_install_query",
     "rom_location_query",
     "rom_locations_query",
     "entry_savefile_query",
@@ -131,6 +132,9 @@ QUERY_FAMILY_FIELDS: dict[str, frozenset[str]] = {
     # folders is asked of one system's entry, optionally named by its label,
     # and optionally of one content path, absolute as the question requires.
     "extra_content_query": frozenset({"installation", "system", "content_path", "label"}),
+    # A package install is asked of one system and one absolute path — a
+    # package or a folder of them — optionally of the entry a label names.
+    "package_install_query": frozenset({"installation", "system", "content_path", "label"}),
     # ROM placement is asked of one system; content plays no part in where a
     # system's ROMs live, so unlike the catalogue query this one takes no path.
     "rom_location_query": frozenset({"installation", "system"}),
@@ -750,6 +754,12 @@ KNOWN_CAVEAT_CODES = {
     "extra-content-folders-unstated",
     "extra-content-scanned-beside-launch",
     "content-outside-extra-content-folders",
+    "package-install-unstated",
+    "package-install-takes-nothing",
+    "package-install-path-unread",
+    "package-header-unread",
+    "package-drive-unresolved",
+    "package-licence-account",
     "emulator-read-unestablished",
     "emulator-config-unread",
     "feature-switch-absent",
@@ -1055,6 +1065,25 @@ def _validate_extra_content_query(name: str, query: Any) -> None:
     _validate_handle_selector(name, "extra_content_query", query)
 
 
+def _validate_package_install_query(name: str, query: Any) -> None:
+    # The system and the absolute path are the question's subject; the label
+    # is optional.
+    if not isinstance(query, dict):
+        fail(f"{name}: input.package_install_query must be an object")
+    keys = set(query)
+    if not {"system", "content_path"} <= keys <= QUERY_FAMILY_FIELDS["package_install_query"]:
+        fail(
+            f"{name}: input.package_install_query must carry 'system' and 'content_path' plus optional 'label' "
+            "and 'installation'"
+        )
+    for key in keys:
+        if not isinstance(query[key], str) or not query[key]:
+            fail(f"{name}: input.package_install_query.{key} must be a non-empty string")
+    if not query["content_path"].startswith("/"):
+        fail(f"{name}: input.package_install_query.content_path must be absolute")
+    _validate_handle_selector(name, "package_install_query", query)
+
+
 def _validate_launchable_query(name: str, query: Any) -> None:
     # Both halves are the question's subject: a verdict without a file has
     # nothing to derive an extension from, and one without a system has no
@@ -1342,6 +1371,7 @@ _OWN_QUERY_VALIDATORS = {
     "launchable_query": _validate_launchable_query,
     "launch_command_query": _validate_launch_command_query,
     "extra_content_query": _validate_extra_content_query,
+    "package_install_query": _validate_package_install_query,
     "rom_location_query": _validate_rom_location_query,
     "rom_locations_query": _validate_rom_locations_query,
     "firmware_query": _validate_firmware_query,
@@ -1711,7 +1741,9 @@ def _validate_input_n3ds_roms(name: str, declared: Any, files: Any) -> None:
 
 # ps3_titles: the path of a PS3 game file `files` declares -> the title id it
 # states, {"source": "param-sfo"|"pkg"|"iso", "title_id": <as stated>}, or
-# "format-not-read" / "executable" / "no-title-id".
+# "format-not-read" / "executable" / "no-title-id". A package may add what its
+# metadata states: "content_type" (an unsigned 32-bit integer) and, beside it,
+# "install_dir" (a string).
 PS3_TITLE_STATES = {"format-not-read", "executable", "no-title-id"}
 PS3_TITLE_SOURCES = {"param-sfo", "pkg", "iso"}
 
@@ -1725,7 +1757,7 @@ def _validate_input_ps3_titles(name: str, declared: Any, files: Any) -> None:
             continue
         if (
             not isinstance(spec, dict)
-            or set(spec) != {"source", "title_id"}
+            or not {"source", "title_id"} <= set(spec) <= {"source", "title_id", "content_type", "install_dir"}
             or spec["source"] not in PS3_TITLE_SOURCES
             or not isinstance(spec["title_id"], str)
             or not spec["title_id"]
@@ -1735,6 +1767,25 @@ def _validate_input_ps3_titles(name: str, declared: Any, files: Any) -> None:
                 f"{name}: ps3 title {path!r} must be one of {sorted(PS3_TITLE_STATES)} or "
                 '{"source": "param-sfo"|"pkg"|"iso", "title_id": <non-empty string>}'
             )
+        _validate_ps3_package_metadata(name, path, spec)
+
+
+def _validate_ps3_package_metadata(name: str, path: str, spec: dict[str, Any]) -> None:
+    """A package's metadata, where a vector models it: a content type, and an install directory only beside one."""
+    if "content_type" not in spec and "install_dir" not in spec:
+        return
+    content_type = spec.get("content_type")
+    if (
+        spec["source"] != "pkg"
+        or isinstance(content_type, bool)
+        or not isinstance(content_type, int)
+        or not 0 <= content_type <= 0xFFFFFFFF
+        or ("install_dir" in spec and not isinstance(spec["install_dir"], str))
+    ):
+        fail(
+            f"{name}: ps3 title {path!r}: a package's metadata is content_type (an unsigned 32-bit integer) and "
+            "optionally install_dir (a string) beside it"
+        )
 
 
 def _validate_n3ds_extdata(name: str, path: str, spec: Any) -> None:
@@ -4277,6 +4328,91 @@ def _validate_launch_command(name: str, answer: Any) -> None:
     _validate_command_body(name, command)
 
 
+PACKAGE_INSTALL_FIELDS = {
+    "entry",
+    "command",
+    "exit_status_reports_outcome",
+    "package_targets",
+    "licence_files",
+    "licence_folder",
+    "caveats",
+}
+PACKAGE_TARGET_FIELDS = {"package", "title_id", "content_type", "destination", "install_folder", "boot_file"}
+PACKAGE_DESTINATIONS = {
+    "package-game-folder",
+    "package-licence-folder",
+    "package-elsewhere",
+    "package-destination-unread",
+}
+
+
+def _validate_package_install(name: str, answer: Any) -> None:
+    """A package-install answer: a command or why not, and what the install leaves only beside a command.
+
+    A game's folder carries its boot file and every other destination none; a
+    destination left unread says why.
+    """
+    _require_exact(name, answer, PACKAGE_INSTALL_FIELDS, "expected.package_install_command")
+    if answer["entry"] is not None:
+        _validate_emulator(name, answer["entry"])
+    _validate_caveats(name, answer["caveats"])
+    command = answer["command"]
+    if command is None:
+        if not answer["caveats"]:
+            fail(f"{name}: expected.package_install_command without a command states why")
+        if (
+            answer["exit_status_reports_outcome"] is not None
+            or answer["package_targets"]
+            or answer["licence_files"]
+            or answer["licence_folder"] is not None
+        ):
+            fail(f"{name}: expected.package_install_command states what an install leaves only beside a command")
+        return
+    _validate_command_body(name, command)
+    if not isinstance(answer["exit_status_reports_outcome"], bool):
+        fail(f"{name}: expected.package_install_command.exit_status_reports_outcome is true or false beside a command")
+    if not isinstance(answer["licence_files"], list) or not all(
+        isinstance(f, str) and f.startswith("/") for f in answer["licence_files"]
+    ):
+        fail(f"{name}: expected.package_install_command.licence_files are absolute paths")
+    _validate_install_path(name, answer["licence_folder"])
+    targets = answer["package_targets"]
+    if not isinstance(targets, list):
+        fail(f"{name}: expected.package_install_command.package_targets is a list")
+    codes = {caveat["code"] for caveat in answer["caveats"]}
+    for target in targets:
+        _validate_package_target(name, target, codes)
+
+
+def _validate_package_target(name: str, target: Any, codes: set[str]) -> None:
+    """One package an install takes: its destination, its content type, and a boot file in a game's folder alone."""
+    _require_exact(name, target, PACKAGE_TARGET_FIELDS, "each package target")
+    if target["destination"] not in PACKAGE_DESTINATIONS:
+        fail(f"{name}: a package target's destination is one of {sorted(PACKAGE_DESTINATIONS)}")
+    content_type = target["content_type"]
+    if content_type is not None and (isinstance(content_type, bool) or not isinstance(content_type, int)):
+        fail(f"{name}: a package target's content_type is an integer or null")
+    _validate_install_path(name, target["install_folder"])
+    _validate_install_path(name, target["boot_file"])
+    game = target["destination"] == "package-game-folder"
+    if target["boot_file"] is not None and (not game or target["install_folder"] is None):
+        fail(f"{name}: a boot file stands only in a game's folder")
+    if target["destination"] == "package-destination-unread" and "package-header-unread" not in codes:
+        fail(f"{name}: a package whose destination is unread says why")
+
+
+def _validate_install_path(name: str, path: Any) -> None:
+    if path is None:
+        return
+    _require_exact(name, path, {"frontend_path", "host_path"}, "a package install path")
+    if not (isinstance(path["frontend_path"], str) and path["frontend_path"].startswith("/")):
+        fail(f"{name}: a package install path's frontend_path is absolute")
+    if path["host_path"] is not None and not (
+        isinstance(path["host_path"], str) and path["host_path"].startswith("/")
+    ):
+        fail(f"{name}: a package install path's host_path is absolute or null")
+
+
 EXTRA_CONTENT_FIELDS = {"entry", "loads_from_folders", "folders", "content_folder_scanned", "caveats"}
 EXTRA_CONTENT_FOLDER_FIELDS = {"path", "subfolders_scanned", "registered_before_launch", "extensions"}
 
@@ -4523,6 +4659,7 @@ _EXPECTED_KEYS = {
     "launchable",
     "launch_command",
     "extra_content_folders",
+    "package_install_command",
     "rom_location",
     "rom_locations",
     "entry_savefile_location",
@@ -4553,6 +4690,7 @@ _EXPECTATION_PAIRINGS = (
     ("launchable", "launchable_query"),
     ("launch_command", "launch_command_query"),
     ("extra_content_folders", "extra_content_query"),
+    ("package_install_command", "package_install_query"),
     ("rom_location", "rom_location_query"),
     ("rom_locations", "rom_locations_query"),
     ("savefile_location", "savefile_query"),
@@ -4592,6 +4730,7 @@ _RESOLVER_EXPECTATIONS = {
     "launchable",
     "launch_command",
     "extra_content_folders",
+    "package_install_command",
     "firmware",
     "identification",
     "systems_for_platform",
@@ -4652,6 +4791,7 @@ def _block_checks(expected: dict[str, Any], inp: dict[str, Any]) -> tuple[_Block
         _BlockCheck("roots", _validate_roots),
         _BlockCheck("launchable", _validate_launchable),
         _BlockCheck("launch_command", _validate_launch_command),
+        _BlockCheck("package_install_command", _validate_package_install),
         _BlockCheck(
             "extra_content_folders",
             lambda name, block: _validate_extra_content(name, block, inp["extra_content_query"]),

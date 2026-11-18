@@ -84,6 +84,11 @@ inst.extra_content_folders("switch", content_path="/.../roms/switch/Game/Game.ns
                                      # loads a game's updates and add-ons from files in folders (true / false
                                      # / null, never false out of ignorance), which folders, and whether the
                                      # content's own folder is one. Stated for a standalone Eden AppImage only.
+inst.package_install_command("ps3", "/.../roms/ps3/Game")
+                                     # on EVERY handle: a PackageInstallAnswer — the command that installs a
+                                     # package (or a folder of them) into the entry's emulator, and what it
+                                     # leaves: each package's destination and a game's boot file, which is
+                                     # the one sign it installed. Stated for RPCS3 under RetroDECK only.
 
 # -> SavefilePlacement (dir, root_kind, needs, file_set, granularity, caveats, fallback_dir, physical_dir),
 #    or — on the entry route — Unresolved (a typed domain outcome, e.g. a standalone entry

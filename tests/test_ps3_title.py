@@ -123,7 +123,7 @@ class TestTheTitleId:
 
     def test_a_package_names_the_title_inside_its_content_id(self):
         facts = read(pkg())
-        assert facts == ps3_title.Ps3TitleFacts(ps3_title.SOURCE_PKG, "NPUB30058")
+        assert facts == ps3_title.Ps3TitleFacts(ps3_title.SOURCE_PKG, "NPUB30058", content_type=0)
         assert ps3_title.title_id(facts) == "NPUB30058"
 
     def test_a_debug_package_is_read_too(self):
@@ -221,7 +221,7 @@ class TestTheRealMachine:
             return machine.read_ps3_title(str(tmp_path / name)).status
 
         result = machine.read_ps3_title(str(tmp_path / "Game.pkg"))
-        assert result.status == PS3_TITLE_OK and result.facts == ps3_title.Ps3TitleFacts("pkg", "NPUB30058")
+        assert result.status == PS3_TITLE_OK and result.facts == ps3_title.Ps3TitleFacts("pkg", "NPUB30058", 0)
         assert status("PARAM.SFO") == PS3_TITLE_OK and status("Game.iso") == PS3_TITLE_OK
         assert status("EBOOT.BIN") == PS3_TITLE_EXECUTABLE
         assert status("junk.bin") == PS3_TITLE_FORMAT_NOT_READ

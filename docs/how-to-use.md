@@ -3502,8 +3502,15 @@ applied to it as RPCS3 at that revision boots (`atlas/rpcs3_boot.py` carries eve
   (`boot-disc-root-missing`); game data (`GD`) boots through RPCS3's game registry, which atlas does not read
   (`boot-registry-unread`); `1P` and `PE` are not followed (`boot-category-unestablished`); every other category, and a
   PARAM.SFO that is missing or that RPCS3's loader keeps nothing of, boots with no disc (`disc_root` `None`). A boot
-  file inside RPCS3's own `dev_hdd0/game` takes other routes and is not followed (`boot-inside-internal-drive`), and
-  where that drive is cannot be told, nothing is stated (`boot-drive-unresolved`).
+  file inside RPCS3's own `dev_hdd0/game` — where a package install puts a game — is read the same way, its category
+  from the `PARAM.SFO` beside its folder: `HG` and every other category booting without a disc boots there as
+  `/dev_hdd0/game/<folder>/…`, so an installed game's folder, or its `USRDIR/EBOOT.BIN`, boots (`disc_root` `None`).
+  Three routes there are not followed: a disc root above the file (RPCS3 moves the dump out of its drive first), a `DG`
+  title (mounted from the drive as the disc and recorded in the registry) — both `boot-inside-internal-drive` — and
+  `GD`, `1P` and `PE` as anywhere else. Where that drive is cannot be told, nothing is stated (`boot-drive-unresolved`).
+  An installed game's folder is named by its title id and carries no extension the `ps3` accept-list holds, so asked of
+  this question it answers `not-accepted` before any boot is read: the frontend would never scan it. A client starting
+  it itself takes its command from `launch_command`, which does not judge the accept-list.
 - **The configured disc directory** stands in front of any disc a boot would mount, an image's own included: the one
   `vfs.yml` names as `/dev_bdvd/`, or RPCS3's compiled default `$(EmulatorDir)dev_bdvd/`. Where it holds a
   `PS3_DISC.SFB`, RPCS3 mounts it as the disc instead, which is not followed (`boot-disc-dir-configured`, naming the
@@ -3854,6 +3861,55 @@ ending in `$` would expand `$_run`. A raw value inside quotes anywhere else (`%R
 of a second shell — the MAME core reads quotes of its own in the command line a libretro argument hands it — so it keeps
 the first shell's reading alone, and a wrapper that evaluates its argument in a shell of its own is a case atlas does
 not see.
+
+## Install a PS3 package — `package_install_command`
+
+A PSN game reaches RPCS3 as a package (`.pkg`), often beside a licence package or a `.rap`/`.edat` file, and has to be
+installed before anything launches — `launchable` answers a package `needs-installation`, naming RPCS3.
+`package_install_command(system, content_path, label=None)` takes that install apart the way `launch_command` takes a
+launch apart:
+
+```python
+answer = handle.package_install_command("ps3", "/home/deck/retrodeck/roms/ps3/Game")
+answer.command              # LaunchCommand: the RPCS3 entry's own program and environment,
+                            # arguments ("--headless", "--installpkg", "/home/deck/retrodeck/roms/ps3/Game")
+answer.exit_status_reports_outcome   # False: RPCS3 exits 0 whatever came of the install
+for target in answer.package_targets:  # in the order RPCS3 installs them
+    target.package, target.title_id, target.content_type
+    target.destination      # package-game-folder | package-licence-folder | package-elsewhere
+                            # | package-destination-unread
+    target.install_folder   # PackageInstallPath(frontend_path, host_path): <dev_hdd0>/game/<title id>
+    target.boot_file        # <dev_hdd0>/game/<title id>/USRDIR/EBOOT.BIN — game folders only
+answer.licence_files        # the .rap and .edat files copied first
+answer.licence_folder       # <dev_hdd0>/home/00000001/exdata
+```
+
+`content_path` is a package or a folder of them, in the emulator's spelling. A folder is replaced by the files directly
+in it, sorted by name, case aside; every file whose path contains `.rap`, then `.edat`, is copied into the licence
+folder, and every one containing `.pkg` is installed in turn — the first that fails ends the install and the ones before
+it stay. A package goes where its unencrypted metadata says: a licence (content type `0x0B`) into the licence folder; a
+theme, widget, VSH module, avatar or memory card somewhere of its own (`package-elsewhere`); anything else into
+`<dev_hdd0>/game/<folder>`, the folder being the nine bytes at offset 55 of its header — the title id — or the directory
+an install-directory packet names in their place. `<dev_hdd0>` is the drive `vfs.yml` names, read exactly as the save
+answer reads it.
+
+**Check the boot file.** The exit status says nothing, so the install succeeded for a game exactly where its `boot_file`
+stands afterwards. A patch or an add-on installs into its game's folder and carries no executable; whether a package
+carries one lies in its encrypted file table, which atlas does not open. Then record the installed game itself —
+`boot_file.frontend_path`, or its folder — as the content: `launch_command` builds its launch, the boot reading names it
+booting from `dev_hdd0/game` (above), and the save answer reads the same title id from the `PARAM.SFO` beside it.
+
+The installer runs as RPCS3's user `00000001` (`--headless` without `--user-id`), and RPCS3 reads licences at launch for
+the user its own settings make current, which atlas does not read. Where the drive holds another account, or which it
+holds is not established, `package-licence-account` says so.
+
+Stated today for RPCS3 under RetroDECK alone. The entry is the one `label` names, or the first in the frontend's order
+whose emulator has an installer atlas reads, preferring one that hands it the file's path. Every other entry and
+arrangement answers no command with `package-install-unstated` (`data`: `installation`, `entry`). A command refused by
+`launch_command` is refused here with the same caveats. Beside a command: `package-install-takes-nothing` (`path`) where
+nothing there is a package, `package-install-path-unread` (`path`) where what lies there cannot be told,
+`package-header-unread` (`package`) where one package's header or metadata was not read or names a folder RPCS3 refuses
+or escapes, and `package-drive-unresolved` where the drive is not established, so no folder is stated.
 
 ## Firmware
 

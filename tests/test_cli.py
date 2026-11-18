@@ -47,6 +47,7 @@ _QUERY_KEY = {
     "mod_location": "mod_query",
     "launch_command": "launch_command_query",
     "extra_content_folders": "extra_content_query",
+    "package_install_command": "package_install_query",
 }
 
 # Questions the corpus asks that the CLI deliberately does not carry: the
@@ -125,6 +126,10 @@ def _question_argv(question: str, query) -> list[str]:
             ["extra-content-folders", "--system", query["system"]]
             + _flag("--content", query.get("content_path"))
             + _flag("--label", query.get("label"))
+        )
+    if question == "package_install_command":
+        return ["package-install-command", "--system", query["system"], "--content", query["content_path"]] + _flag(
+            "--label", query.get("label")
         )
     if question == "firmware":
         return _firmware_argv(query)

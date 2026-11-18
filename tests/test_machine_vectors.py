@@ -39,6 +39,7 @@ from atlas.contract import (
     systems_contract,
     launchable_contract,
     extra_content_contract,
+    package_install_contract,
     launch_command_contract,
     firmware_contract,
     identification_contract,
@@ -205,6 +206,13 @@ def _extra_content_folders(installs, query, name):
     )
 
 
+def _package_install_command(installs, query, name):
+    install = _select(installs, query.get("installation"), name)
+    return package_install_contract(
+        install.package_install_command(query["system"], query["content_path"], label=query.get("label"))
+    )
+
+
 def _appendconfig(query) -> tuple[str, ...]:
     """The appended files as the question takes them — the vector spells RetroArch's one '|'-joined value."""
     return (query["appendconfig"],) if "appendconfig" in query else ()
@@ -346,6 +354,7 @@ QUESTIONS = {
     "launchable": ("launchable_query", _launchable),
     "launch_command": ("launch_command_query", _launch_command),
     "extra_content_folders": ("extra_content_query", _extra_content_folders),
+    "package_install_command": ("package_install_query", _package_install_command),
     "rom_location": ("rom_location_query", _rom_location),
     "rom_locations": ("rom_locations_query", _rom_locations),
     "aggregate": ("aggregate_query", _aggregate),
