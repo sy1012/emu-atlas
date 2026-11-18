@@ -1858,6 +1858,25 @@ is the game's choice, not the emulator's: a game hands the utility any folder na
 prefixes than its own, so a disc release and its PSN one, or a sequel reading its predecessor's save, may keep folders
 under another title's id. `ps3-save-prefix-may-differ` says so beside every unit; atlas keeps no table that re-keys it.
 
+**Name the Wii U archive, and Cemu's answer names the title's save folder.** Cemu keeps a title's save in the MLC at
+`usr/save/<high>/<low>` — `meta/` beside `user/<persistent id>/` and `user/common/`, lowercase hex, the words those of
+the title id the emulator runs. Ask with `content_path=` naming a `.wua` and atlas reads the archive's index the way
+Cemu's ZArchive reader opens it (`atlas/wua.py`: the 144-byte footer at the end, the file tree and the name table, none
+of it compressed, so nothing is decompressed) and lists its top-level folders, each named `<title id>_v<version>` by
+Cemu's packer. The title a launch runs is the one of a bootable type — a base title (`00050000`), a demo (`00050002`) or
+a system title — never an update (`0005000e`) or downloadable content (`0005000c`) beside it. Exactly one such title
+names the save: the first group's `dir` is `usr/save/<high>/<low>`, `needs` is empty, and its
+`unit.kind == "own-folder"` with `unit.archive_folder` the low word — the folder an archive keeps its entries under,
+`<low>/meta/…` and `<low>/user/…`, the shape Argosy's `WiiUFolderHandler` uploads a Wii U save in. The folder need not
+exist yet: Cemu creates it when the game first initialises its save, and the unit is stated all the same. A folder dump
+launched through its `code/<name>.rpx` (beside `content/` and `meta/`) is read the same way from `code/app.xml`'s
+`title_id`. An archive bundling two bootable titles — Cemu would run the first in the archive's order, but no one game's
+save is named — or holding none, a `.wud`, `.wux` or `.iso` disc image, an `.rpx` outside a dump (which Cemu runs under
+a placeholder id), and bytes that are no archive Cemu's reader opens all leave the answer as it is without a content
+path: `usr/save/<save_id>` with the hole spelled `title-id-words`, the reason riding `sources`. The id is the title
+folder's name, which Cemu's packer writes from the title's own `app.xml`; atlas does not decompress `app.xml` to check
+the two agree.
+
 **A GameCube card atlas cannot reach is not an empty slot.** A slot whose card path only the emulator's sandbox can
 spell still holds the card the emulator writes to — whether those writes are kept cannot be told from here — and the
 answer says so: no group for that card, because atlas has no directory to state one in, `sandbox-path-untranslated`

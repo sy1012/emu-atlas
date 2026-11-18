@@ -85,6 +85,7 @@ def fixture_machine(inp) -> FixtureMachine:
         psp_discs=inp.get("psp_discs"),
         psp_param_sfos=inp.get("psp_param_sfos"),
         n3ds_roms=inp.get("n3ds_roms"),
+        wua_archives=inp.get("wua_archives"),
         ps3_titles=inp.get("ps3_titles"),
         disc_identities=inp.get("disc_identities"),
         archive_texts=inp.get("archive_texts"),

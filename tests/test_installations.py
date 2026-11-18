@@ -8988,6 +8988,9 @@ class _CountingMachine:
     def read_n3ds_rom(self, path):
         return self._inner.read_n3ds_rom(path)
 
+    def read_wua_titles(self, path):
+        return self._inner.read_wua_titles(path)
+
     def read_ps3_title(self, path):
         return self._inner.read_ps3_title(path)
 

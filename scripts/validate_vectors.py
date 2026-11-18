@@ -49,6 +49,7 @@ INPUT_FIELDS_OPTIONAL = {
     "psp_discs",
     "psp_param_sfos",
     "n3ds_roms",
+    "wua_archives",
     "ps3_titles",
     "disc_identities",
     "archives",
@@ -1430,6 +1431,7 @@ def _validate_input(name: str, inp: Any) -> None:
     _validate_input_psp_discs(name, inp.get("psp_discs", {}), inp["files"])
     _validate_input_psp_param_sfos(name, inp.get("psp_param_sfos", {}), inp["files"])
     _validate_input_n3ds_roms(name, inp.get("n3ds_roms", {}), inp["files"])
+    _validate_input_wua_archives(name, inp.get("wua_archives", {}), inp["files"])
     _validate_input_ps3_titles(name, inp.get("ps3_titles", {}), inp["files"])
     _validate_input_archives(name, inp.get("archives", {}), inp["files"])
     _validate_input_disc_identities(name, inp.get("disc_identities", {}), inp["files"], inp.get("archives", {}))
@@ -1706,6 +1708,37 @@ def _validate_input_psp_param_sfos(name: str, declared: Any, files: Any) -> None
             or len(set(spec)) != len(spec)
         ):
             fail(f"{name}: psp param.sfo {path!r} must be 'not-an-sfo' or a list of distinct non-empty keys")
+
+
+# wua_archives: the path of a Wii U archive `files` declares -> its top-level
+# title folders, {"title_folders": ["<16 hex>_v<version>", ...]} in the
+# archive's order, or "format-not-read" / "not-an-archive".
+WUA_ARCHIVE_STATES = {"format-not-read", "not-an-archive"}
+_WUA_TITLE_FOLDER = re.compile(r"[0-9a-fA-F]{16}_v(0|[1-9][0-9]{0,4})")
+
+
+def _is_wua_title_folder(value: Any) -> bool:
+    match = isinstance(value, str) and _WUA_TITLE_FOLDER.fullmatch(value)
+    return bool(match) and int(value.split("_v", 1)[1]) <= 0xFFFF
+
+
+def _validate_input_wua_archives(name: str, declared: Any, files: Any) -> None:
+    if not isinstance(declared, dict):
+        fail(f"{name}: input.wua_archives must be an object")
+    for path, spec in declared.items():
+        _declared_readable(name, "wua archive", path, files)
+        if isinstance(spec, str) and spec in WUA_ARCHIVE_STATES:
+            continue
+        if (
+            not isinstance(spec, dict)
+            or set(spec) != {"title_folders"}
+            or not isinstance(spec["title_folders"], list)
+            or not all(_is_wua_title_folder(folder) for folder in spec["title_folders"])
+        ):
+            fail(
+                f"{name}: wua archive {path!r} must be one of {sorted(WUA_ARCHIVE_STATES)} or "
+                '{"title_folders": ["<16 hex>_v<version>", ...]}'
+            )
 
 
 # n3ds_roms: the path of a 3DS image `files` declares -> what Azahar reads of it,
