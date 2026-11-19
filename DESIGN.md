@@ -284,10 +284,11 @@ class Machine(Protocol):
 - Beside those, the seam carries the reads that establish a game's identity from its content's bytes — a PlayStation
   disc's licence and `SYSTEM.CNF`, a Dolphin disc's header and ticket, a Switch package's PFS0 names, a PSP disc's
   `DISC_ID`, a PSP savedata folder's `PARAM.SFO` keys, a 3DS image's program and extdata ids, a PS3 game's title id from
-  its `PARAM.SFO`, its PSN package's header or its image, and a Wii U archive's top-level title folders from its
-  ZArchive index — each bounded, each with its own closed status, and each a modelled input in a fixture
-  (`dolphin_discs`, `switch_packages`, `psp_discs`, `psp_param_sfos`, `n3ds_roms`, `ps3_titles`, `wua_archives`, …)
-  rather than an image carried in a test: the facts sit inside files no fixture should hold.
+  its `PARAM.SFO`, its PSN package's header or its image, a Wii U archive's top-level title folders from its ZArchive
+  index, a PS2 disc's `BOOT2` line from its `SYSTEM.CNF` and whether a PCSX2 folder card's `_pcsx2_superblock` is
+  formatted — each bounded, each with its own closed status, and each a modelled input in a fixture (`dolphin_discs`,
+  `switch_packages`, `psp_discs`, `psp_param_sfos`, `n3ds_roms`, `ps3_titles`, `wua_archives`, `ps2_discs`,
+  `pcsx2_superblocks`, …) rather than an image carried in a test: the facts sit inside files no fixture should hold.
 - The seam reads the host, but the configs it reads were written from inside a sandbox: a Flatpak'd emulator spells its
   own paths `/app/...` and `/var/config/...` (the live RetroDECK cfg puts its override directory there). Every
   cfg-derived path is therefore translated to its host location before it becomes a read, per app id; a sandbox-only

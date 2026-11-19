@@ -1877,6 +1877,28 @@ path: `usr/save/<save_id>` with the hole spelled `title-id-words`, the reason ri
 folder's name, which Cemu's packer writes from the title's own `app.xml`; atlas does not decompress `app.xml` to check
 the two agree.
 
+**Name the PS2 disc, and PCSX2's folder card names the game's directories.** A folder memory card is a directory at the
+card's path holding one directory per save, each named by the game — by the platform's convention `B`, a region letter
+and the product code, then a name of the game's own (`BASLUS-20152AC04`) — beside the card's own `_pcsx2_` bookkeeping
+files. PCSX2 indexes such a card only behind a formatted `_pcsx2_superblock`, and shows a running game the directories
+whose names _contain_ its filter: the disc's serial, or the strings its GameDB entry lists as `memcardFilters`. Ask with
+`content_path=` naming an `.iso`, `.bin`, `.img` or `.mdf` and atlas reads the serial the way PCSX2 does
+(`atlas/ps2_disc.py`: the image's layout by trial, the primary volume descriptor, `SYSTEM.CNF` in the root, its `BOOT2`
+line spelled `SLUS-20152`). Where the slots hold exactly one folder card, that card's group carries
+`unit.kind == "own-folders-by-prefix"` with `unit.prefix` the start of the game's directories — `BASLUS-20152` — and
+`unit.members` the ones there now, matched ASCII case aside; `needs` stays empty. The prefix is read off the card: every
+directory the filter shows the game must begin `B`, one shared region letter and the serial. A game that has not saved
+yet is a unit of no members, its letter taken from the serial's family (`SLUS`/`SCUS` `A`, `SLES`/`SCES` `E`,
+`SLPS`/`SLPM`/`SCPS` `I`); another family's never-saved game states no unit. A GameDB list of one serial is the serial
+its directories carry — a second disc saving as its first (`SLES-82012` as `SLES-82011`); a list of several names no one
+prefix. `ps2-save-prefix-may-differ` rides beside every unit: the game names its directories, and a game saving under
+another serial or reading a predecessor's keeps directories the unit does not list. No unit is stated — the folder card
+stays the tree it is, its names refused, the reason riding `sources` — where the disc is a CHD, CSO, ZSO or gzipped
+image (containers PCSX2 opens and atlas does not; a DVD CHD's hunks use codecs atlas has no decoder for), names no PS2
+serial, or cannot be read; where the slots hold several folder cards, the card's superblock is not formatted or the card
+cannot be listed; or where the directories PCSX2 shows the game begin with two leads. A file card is one shared image
+and never carries a unit.
+
 **A GameCube card atlas cannot reach is not an empty slot.** A slot whose card path only the emulator's sandbox can
 spell still holds the card the emulator writes to — whether those writes are kept cannot be told from here — and the
 answer says so: no group for that card, because atlas has no directory to state one in, `sandbox-path-untranslated`

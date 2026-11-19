@@ -1953,6 +1953,35 @@ Shape:
 - A table ages with its emulator. Each is pinned to the revision it was read at, and a build that ships a longer table
   recognises images this one does not — which is a stated limit of the answer, not a silent one.
 
+## `pcsx2_memcard_filters.json` — which PS2 serials a folder card filters by something else
+
+PCSX2 shows a running game only the directories of a folder memory card whose names contain its filter, and the filter
+is the disc's serial unless the game's GameDB entry lists `memcardFilters` — then those strings, joined, replace it
+(`VMManager::UpdateDiscDetails`, `pcsx2/VMManager.cpp:1113` and `:1161`; `FilterMatches`,
+`pcsx2/SIO/Memcard/MemoryCardFolder.cpp:424-446` at PCSX2 v2.8.2). That list lives in the GameIndex.yaml inside PCSX2's
+own resources, which atlas does not parse off the machine, so the entries that carry one are packaged here: **418
+serials** at fd9d310c, the commit RetroDECK's v2.8.2 build names, each with its filters in the file's order. Read by
+`atlas.ps2_disc.memcard_filters`, which looks a serial up lower-cased the way `GameDatabase::findGame` does.
+
+```json
+{
+  "_meta": { "generated_from": "...", "revision": "fd9d310c...", "entries": 418 },
+  "filters": { "SLES-82012": ["SLES-82011"], "...": ["..."] }
+}
+```
+
+What a list means for a save unit is the resolver's (`docs/how-to-use.md`, PCSX2's folder card): one serial there is the
+serial the game's directories carry; several name no one prefix. A serial absent here filters by itself. Seventy-two of
+the 418 lists do not include the entry's own serial — a bundle disc, a second disc, a re-release saving as the original
+— which is the reason the table is carried rather than the convention assumed.
+
+Regenerated from a GameIndex.yaml fetched at the pinned revision; the script reads it by line, because the stdlib has no
+YAML reader, and refuses a `memcardFilters` line it cannot read:
+
+```sh
+python scripts/generate_pcsx2_memcard_filters.py GameIndex.yaml --revision <commit>
+```
+
 ## `firmware_hashes.json`
 
 What a correct firmware file's bytes are: the `md5` / `sha1` / `size` triple that identifies it. This is world knowledge

@@ -162,6 +162,8 @@ from atlas.machine import (
     N3dsRomResult,
     WuaTitlesResult,
     Ps3TitleResult,
+    Pcsx2SuperblockStatus,
+    Ps2DiscResult,
     PspDiscResult,
     PspParamSfoResult,
     SwitchPackageResult,
@@ -6147,6 +6149,14 @@ class _CountingMachine:
     def read_psp_disc(self, path: str) -> PspDiscResult:
         self._count("read_psp_disc")
         return self._inner.read_psp_disc(path)
+
+    def read_ps2_disc(self, path: str) -> Ps2DiscResult:
+        self._count("read_ps2_disc")
+        return self._inner.read_ps2_disc(path)
+
+    def read_pcsx2_superblock(self, path: str) -> Pcsx2SuperblockStatus:
+        self._count("read_pcsx2_superblock")
+        return self._inner.read_pcsx2_superblock(path)
 
     def read_psp_param_sfo(self, path: str) -> PspParamSfoResult:
         self._count("read_psp_param_sfo")

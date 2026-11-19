@@ -47,6 +47,8 @@ INPUT_FIELDS_OPTIONAL = {
     "switch_packages",
     "eden_profiles",
     "psp_discs",
+    "ps2_discs",
+    "pcsx2_superblocks",
     "psp_param_sfos",
     "n3ds_roms",
     "wua_archives",
@@ -751,6 +753,7 @@ KNOWN_CAVEAT_CODES = {
     "active-profile-unestablished",
     "psn-save-prefix-may-differ",
     "ps3-save-prefix-may-differ",
+    "ps2-save-prefix-may-differ",
     "appimage-ambiguous",
     "extra-content-folders-unstated",
     "extra-content-scanned-beside-launch",
@@ -1429,6 +1432,8 @@ def _validate_input(name: str, inp: Any) -> None:
     _validate_input_switch_packages(name, inp.get("switch_packages", {}), inp["files"])
     _validate_input_eden_profiles(name, inp.get("eden_profiles", {}), inp["files"])
     _validate_input_psp_discs(name, inp.get("psp_discs", {}), inp["files"])
+    _validate_input_ps2_discs(name, inp.get("ps2_discs", {}), inp["files"])
+    _validate_input_pcsx2_superblocks(name, inp.get("pcsx2_superblocks", {}), inp["files"])
     _validate_input_psp_param_sfos(name, inp.get("psp_param_sfos", {}), inp["files"])
     _validate_input_n3ds_roms(name, inp.get("n3ds_roms", {}), inp["files"])
     _validate_input_wua_archives(name, inp.get("wua_archives", {}), inp["files"])
@@ -1693,6 +1698,45 @@ def _validate_input_psp_discs(name: str, declared: Any, files: Any) -> None:
                 f"{name}: psp disc {path!r} must be 'format-not-read', 'not-a-disc' or "
                 '{"container": "iso", "disc_id": <non-empty string>}'
             )
+
+
+# ps2_discs: the path of a PS2 disc image `files` declares -> the boot line
+# PCSX2 names it by, {"disc_type": "ps2"|"ps1", "boot": <the BOOT2/BOOT value
+# as written>}, or "format-not-read" / "not-a-disc". pcsx2_superblocks: the
+# path of a folder card's _pcsx2_superblock `files` declares -> "formatted" or
+# "unformatted".
+PS2_DISC_STATES = {"format-not-read", "not-a-disc"}
+PS2_DISC_TYPES = {"ps2", "ps1"}
+PCSX2_SUPERBLOCK_STATES = {"formatted", "unformatted"}
+
+
+def _validate_input_ps2_discs(name: str, declared: Any, files: Any) -> None:
+    if not isinstance(declared, dict):
+        fail(f"{name}: input.ps2_discs must be an object")
+    for path, spec in declared.items():
+        _declared_readable(name, "ps2 disc", path, files)
+        if isinstance(spec, str) and spec in PS2_DISC_STATES:
+            continue
+        if (
+            not isinstance(spec, dict)
+            or set(spec) != {"disc_type", "boot"}
+            or spec["disc_type"] not in PS2_DISC_TYPES
+            or not isinstance(spec["boot"], str)
+            or "\0" in spec["boot"]
+        ):
+            fail(
+                f"{name}: ps2 disc {path!r} must be 'format-not-read', 'not-a-disc' or "
+                '{"disc_type": "ps2"|"ps1", "boot": <string>}'
+            )
+
+
+def _validate_input_pcsx2_superblocks(name: str, declared: Any, files: Any) -> None:
+    if not isinstance(declared, dict):
+        fail(f"{name}: input.pcsx2_superblocks must be an object")
+    for path, spec in declared.items():
+        _declared_readable(name, "pcsx2 superblock", path, files)
+        if spec not in PCSX2_SUPERBLOCK_STATES:
+            fail(f"{name}: pcsx2 superblock {path!r} must be one of {sorted(PCSX2_SUPERBLOCK_STATES)}")
 
 
 def _validate_input_psp_param_sfos(name: str, declared: Any, files: Any) -> None:

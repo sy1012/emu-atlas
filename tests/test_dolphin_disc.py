@@ -517,14 +517,15 @@ class TestOnlyTheReadingsThatEstablishItStateIt:
         # names the application and the active user; PSP by PPSSPP's, which
         # names the game's id; 3DS by Azahar's, which names the title; PS3 by
         # RPCS3's, which names the title id where one user account is listed;
-        # Wii U by Cemu's, which names the title an archive or dump launches.
+        # Wii U by Cemu's, which names the title an archive or dump launches;
+        # PS2 by PCSX2's, which names the serial where one folder card is held.
         stated = [
             system
             for system, answer in self._answers()
             for group in (answer.get("file_set") or {}).get("groups", [])
             if group["unit"] is not None
         ]
-        assert stated and set(stated) <= {"gc", "wii", "switch", "psp", "n3ds", "ps3", "wiiu"}
+        assert stated and set(stated) <= {"gc", "wii", "switch", "psp", "n3ds", "ps3", "wiiu", "ps2"}
 
     def test_cemu_states_a_unit_only_as_a_read_titles_own_folder(self):
         # The hole's group keys every title; a unit is stated only where the
@@ -557,3 +558,22 @@ class TestOnlyTheReadingsThatEstablishItStateIt:
         assert any(group["unit"] is None for group in groups)
         units = [group["unit"] for group in groups if group["unit"] is not None]
         assert units and all(unit["kind"] == atlas.SAVE_UNIT_PREFIXED_FOLDERS for unit in units)
+
+    def test_pcsx2_states_a_unit_only_on_a_folder_card_as_the_games_prefixed_directories(self):
+        # A file card is one shared image: no unit. A folder card is the parent
+        # of every game's directories: a unit there is only ever the
+        # directories a B<region><serial> prefix begins, never the card whole.
+        groups = [
+            group
+            for asked, answer in self._answers()
+            if asked == "ps2"
+            for group in (answer.get("file_set") or {}).get("groups", [])
+            if group["role"] == atlas.ROLE_MEMORY_CARD
+        ]
+        assert all(group["unit"] is None for group in groups if group["files"] is not None)
+        folder = [group for group in groups if group["files"] is None]
+        assert any(group["unit"] is None for group in folder)
+        units = [group["unit"] for group in folder if group["unit"] is not None]
+        assert units and all(
+            unit["kind"] == atlas.SAVE_UNIT_PREFIXED_FOLDERS and unit["prefix"][0] == "B" for unit in units
+        )

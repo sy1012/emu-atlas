@@ -84,6 +84,8 @@ def fixture_machine(inp) -> FixtureMachine:
         eden_profiles=inp.get("eden_profiles"),
         psp_discs=inp.get("psp_discs"),
         psp_param_sfos=inp.get("psp_param_sfos"),
+        ps2_discs=inp.get("ps2_discs"),
+        pcsx2_superblocks=inp.get("pcsx2_superblocks"),
         n3ds_roms=inp.get("n3ds_roms"),
         wua_archives=inp.get("wua_archives"),
         ps3_titles=inp.get("ps3_titles"),

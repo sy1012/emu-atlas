@@ -8982,6 +8982,12 @@ class _CountingMachine:
     def read_psp_disc(self, path):
         return self._inner.read_psp_disc(path)
 
+    def read_ps2_disc(self, path):
+        return self._inner.read_ps2_disc(path)
+
+    def read_pcsx2_superblock(self, path):
+        return self._inner.read_pcsx2_superblock(path)
+
     def read_psp_param_sfo(self, path):
         return self._inner.read_psp_param_sfo(path)
 
